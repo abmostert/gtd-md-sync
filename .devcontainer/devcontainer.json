@@ -1,0 +1,4 @@
+{
+  "name": "gtd-md-sync",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12"
+}
