@@ -201,6 +201,12 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
+
+# Local GTD data (generated)
+master.json
+views/
+
+
 # Marimo
 marimo/_static/
 marimo/_lsp/
