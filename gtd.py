@@ -318,8 +318,11 @@ def main() -> int:
         help="Directory to initialize in (default: current directory)"
     )
 
+    p_add = sub.add_parser("add", help="Interactive add (project/action)")
+    p_add.add_argument("--dir", default=".", help="GTD workspace directory (default: current directory)")
+
+    
     # Stubs for later
-    sub.add_parser("add", help="Interactive add (project/action)")
     sub.add_parser("build", help="Generate Markdown views from master.json")
     sub.add_parser("sync", help="Import checkbox completions from Markdown into master.json")
 
@@ -328,6 +331,11 @@ def main() -> int:
     if args.cmd == "init":
         base_dir = Path(args.dir).expanduser().resolve()
         return cmd_init(base_dir)
+
+    if args.cmd == "add":
+        base_dir = Path(args.dir).expanduser().resolve()
+        return cmd_add(base_dir)
+
 
     # For now, keep these as placeholders
     print(f"Command received: {args.cmd}")
