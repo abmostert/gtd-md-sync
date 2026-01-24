@@ -7,6 +7,8 @@ from pathlib import Path
 
 from gtdlib.commands.add_cmd import cmd_add
 from gtdlib.commands.init_cmd import cmd_init
+from gtdlib.commands.build_cmd import cmd_build
+
 
 
 def main() -> int:
