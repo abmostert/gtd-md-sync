@@ -25,7 +25,9 @@ def main() -> int:
     p_add = sub.add_parser("add", help="Interactive add (project/action)")
     p_add.add_argument("--dir", default=".", help="GTD workspace directory (default: current directory)")
 
-    sub.add_parser("build", help="Generate Markdown views from master.json")
+    p_build = sub.add_parser("build", help="Generate Markdown views from master.json")
+    p_build.add_argument("--dir", default=".", help="GTD workspace directory (default: current directory)")
+
     sub.add_parser("sync", help="Import checkbox completions from Markdown into master.json")
 
     args = parser.parse_args()
@@ -39,8 +41,9 @@ def main() -> int:
         return cmd_add(base_dir)
 
     if args.cmd == "build":
-        print("TODO: build not implemented yet")
-        return 0
+        base_dir = Path(args.dir).expanduser().resolve()
+        return cmd_build(base_dir)
+
 
     if args.cmd == "sync":
         print("TODO: sync not implemented yet")
