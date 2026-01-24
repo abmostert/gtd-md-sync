@@ -8,7 +8,7 @@ from pathlib import Path
 from gtdlib.commands.add_cmd import cmd_add
 from gtdlib.commands.init_cmd import cmd_init
 from gtdlib.commands.build_cmd import cmd_build
-
+from gtdlib.commands.sync_cmd import cmd_sync
 
 
 def main() -> int:
@@ -28,7 +28,8 @@ def main() -> int:
     p_build = sub.add_parser("build", help="Generate Markdown views from master.json")
     p_build.add_argument("--dir", default=".", help="GTD workspace directory (default: current directory)")
 
-    sub.add_parser("sync", help="Import checkbox completions from Markdown into master.json")
+    p_sync = sub.add_parser("sync", help="Import checkbox completions from Markdown into master.json")
+    p_sync.add_argument("--dir", default=".", help="GTD workspace directory (default: current directory)")
 
     args = parser.parse_args()
 
@@ -46,8 +47,8 @@ def main() -> int:
 
 
     if args.cmd == "sync":
-        print("TODO: sync not implemented yet")
-        return 0
+        base_dir = Path(args.dir).expanduser().resolve()
+        return cmd_sync(base_dir)
 
     return 0
 
