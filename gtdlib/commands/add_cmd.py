@@ -10,6 +10,8 @@ from gtdlib.store import (
     prompt_optional_date,
     save_master,
     utc_now_iso,
+    ensure_config,
+    normalize_context,
 )
 
 
@@ -21,6 +23,31 @@ def cmd_add(base_dir: Path) -> int:
     - For projects, enforces entering the first next action (your GTD rule).
     - Includes a preview + confirm step: Save / Redo / Cancel.
     """
+
+    def choose_context(contexts: list[str]) -> str:
+        """
+        Force selection from configured contexts.
+        User can type the number or exact context name.
+        """
+        if not contexts:
+            raise RuntimeError("No contexts configured. Add contexts with `gtd context add ...`.")
+
+        print("\nAvailable contexts:")
+        for i, c in enumerate(contexts, start=1):
+            print(f"  {i}. {c}")
+
+        while True:
+            raw = input("Choose context (number or name): ").strip()
+            if raw.isdigit():
+                idx = int(raw)
+                if 1 <= idx <= len(contexts):
+                    return contexts[idx - 1]
+            else:
+                cand = normalize_context(raw)
+                if cand in contexts:
+                    return cand
+            print("Invalid context. Choose a number from the list or type an exact context name.")
+
 
     def confirm_or_redo() -> str:
         """
@@ -38,6 +65,11 @@ def cmd_add(base_dir: Path) -> int:
             print("Please enter s, r, or c.")
 
     master = load_master(base_dir)
+
+    cfg = ensure_config(base_dir)
+    contexts = [normalize_context(c) for c in cfg.get("contexts", [])]
+    contexts = sorted(set(contexts))
+
     now = utc_now_iso()
 
     kind = prompt("Add (a)ction or (p)roject? ", default="a").lower()
@@ -55,7 +87,7 @@ def cmd_add(base_dir: Path) -> int:
                 print("Action title is required.")
                 continue
 
-            context = prompt("Context (e.g. home/work/phone/computer): ", default="inbox")
+            context = choose_context(contexts)
             state = prompt("State (active/someday/waiting/completed/dropped): ", default="active")
             due = prompt_optional_date("Due date")
             notes = prompt("Notes (optional): ", default="")

@@ -9,6 +9,8 @@ from gtdlib.commands.add_cmd import cmd_add
 from gtdlib.commands.init_cmd import cmd_init
 from gtdlib.commands.build_cmd import cmd_build
 from gtdlib.commands.sync_cmd import cmd_sync
+from gtdlib.commands.context_cmd import cmd_context_list, cmd_context_add, cmd_context_drop
+
 
 
 def main() -> int:
@@ -31,6 +33,18 @@ def main() -> int:
     p_sync = sub.add_parser("sync", help="Import checkbox completions from Markdown into master.json")
     p_sync.add_argument("--dir", default=".", help="GTD workspace directory (default: current directory)")
 
+    p_context = sub.add_parser("context", help="Manage allowed contexts")
+    p_context.add_argument("--dir", default=".", help="GTD workspace directory (default: current directory)")
+    subc = p_context.add_subparsers(dest="context_cmd", required=True)
+
+    p_c_list = subc.add_parser("list", help="List contexts")
+
+    p_c_add = subc.add_parser("add", help="Add a context")
+    p_c_add.add_argument("name", help="Context name (e.g. errands)")
+
+    p_c_drop = subc.add_parser("drop", help="Drop a context")
+    p_c_drop.add_argument("name", help="Context name to remove")
+
     args = parser.parse_args()
 
     if args.cmd == "init":
@@ -49,6 +63,16 @@ def main() -> int:
     if args.cmd == "sync":
         base_dir = Path(args.dir).expanduser().resolve()
         return cmd_sync(base_dir)
+
+    if args.cmd == "context":
+        base_dir = Path(args.dir).expanduser().resolve()
+        if args.context_cmd == "list":
+            return cmd_context_list(base_dir)
+        if args.context_cmd == "add":
+            return cmd_context_add(base_dir, args.name)
+        if args.context_cmd == "drop":
+            return cmd_context_drop(base_dir, args.name)
+
 
     return 0
 

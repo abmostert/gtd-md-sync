@@ -10,6 +10,7 @@ from gtdlib.store import (
     utc_now_iso,
     write_json_if_missing,
     write_text_if_missing,
+    ensure_config,
 )
 
 
@@ -31,7 +32,7 @@ def cmd_init(base_dir: Path) -> int:
     else:
         print(f"Folder exists:  {views_dir}")
 
-    # 2) Create master.json if missing
+    # 2) Create master.json and config file if missing
     master_path = base_dir / MASTER_FILENAME
     empty_master = {
         "meta": {
@@ -48,6 +49,11 @@ def cmd_init(base_dir: Path) -> int:
         created_anything = True
     else:
         print(f"File exists:    {master_path}")
+
+
+    cfg = ensure_config(base_dir)
+    print(f"Config ready:  {base_dir / 'config.json'} (contexts: {len(cfg.get('contexts', []))})")
+
 
     # 3) Create view files if missing
     for filename, starter in VIEW_FILES.items():

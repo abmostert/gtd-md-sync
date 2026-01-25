@@ -8,6 +8,7 @@ from pathlib import Path
 from uuid import uuid4
 
 MASTER_FILENAME = "master.json"
+CONFIG_FILENAME = "config.json"
 VIEWS_DIRNAME = "views"
 
 # Starter view files (you can expand later)
@@ -16,6 +17,19 @@ VIEW_FILES: dict[str, str] = {
     "projects.md": "# Projects\n\n",
     "someday.md": "# Someday / Maybe\n\n",
 }
+
+# Starter contexts (you can modify later)
+DEFAULT_CONTEXTS = [
+    "inbox",
+    "home",
+    "work",
+    "phone",
+    "computer",
+    "errands",
+    "agenda",
+    "waiting_for",
+]
+
 
 
 def utc_now_iso() -> str:
@@ -78,3 +92,40 @@ def prompt_optional_date(text: str) -> str | None:
     """Accept YYYY-MM-DD or empty for None. (No strict validation in v1.)"""
     s = input(f"{text} (YYYY-MM-DD, or blank): ").strip()
     return s or None
+
+
+def load_config(base_dir: Path) -> dict:
+    """
+    Load config.json from the GTD workspace directory.
+    If missing, returns a default config (doesn't write).
+    """
+    cfg_path = base_dir / CONFIG_FILENAME
+    if not cfg_path.exists():
+        return {"contexts": list(DEFAULT_CONTEXTS)}
+    return json.loads(cfg_path.read_text(encoding="utf-8"))
+
+
+def save_config(base_dir: Path, cfg: dict) -> None:
+    cfg_path = base_dir / CONFIG_FILENAME
+    cfg_path.write_text(
+        json.dumps(cfg, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+
+def ensure_config(base_dir: Path) -> dict:
+    """
+    Ensure config.json exists. If not, create it with defaults.
+    Returns the loaded config.
+    """
+    cfg_path = base_dir / CONFIG_FILENAME
+    if not cfg_path.exists():
+        cfg = {"contexts": list(DEFAULT_CONTEXTS)}
+        save_config(base_dir, cfg)
+        return cfg
+    return load_config(base_dir)
+
+
+def normalize_context(s: str) -> str:
+    return s.strip().lower().replace(" ", "_")
+
