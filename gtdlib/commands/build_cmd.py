@@ -24,7 +24,7 @@ def cmd_build(base_dir: Path) -> int:
     actions = master.get("actions", {})
     projects = master.get("projects", {})
 
-    _build_next_actions(views_dir, actions)
+    _build_next_actions(views_dir, actions, projects)
     _build_projects(views_dir, projects, actions)
     _build_someday(views_dir, projects, actions)
 
@@ -41,7 +41,7 @@ def _id_comment(item_id: str) -> str:
 # View builders
 # -------------------------
 
-def _build_next_actions(views_dir: Path, actions: dict) -> None:
+def _build_next_actions(views_dir: Path, actions: dict, projects: dict) -> None:
     # Group ACTIVE actions by context
     by_context: dict[str, list[tuple[str, dict]]] = defaultdict(list)
 
@@ -62,7 +62,16 @@ def _build_next_actions(views_dir: Path, actions: dict) -> None:
         for aid, a in items:
             due = f" (due {a['due']})" if a.get("due") else ""
             # checkbox stays unchecked; user ticks it. We embed ID as HTML comment.
-            lines.append(f"- [ ] {a.get('title','')}{due} {_id_comment(aid)}")
+            proj_label = ""
+            pid = a.get("project")
+            if pid and pid in projects:
+                proj_title = projects[pid].get("title", "").strip()
+                if proj_title:
+                    proj_label = f" [{proj_title}]"
+
+            lines.append(f"- [ ] {a.get('title','')}{proj_label}{due} {_id_comment(aid)}")
+
+
         lines.append("")
 
     (views_dir / "next_actions.md").write_text(
