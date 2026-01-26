@@ -7,7 +7,7 @@ from gtdlib.store import load_master, save_master, utc_now_iso, VIEWS_DIRNAME
 
 
 ID_COMMENT_RE = re.compile(r"<!--\s*id:(?P<id>[ap]_[0-9a-f]{8})\s*-->")
-CHECKBOX_RE = re.compile(r"^\s*-\s*\[(?P<mark>[ xX])\]\s*(?P<text>.*)$")
+CHECKBOX_RE = re.compile(r"^\s*[-*+]\s*\[(?P<mark>[ xX])\]\s*(?P<text>.*)$")
 
 
 def _extract_completions_from_markdown(text: str) -> dict[str, bool]:
@@ -28,8 +28,9 @@ def _extract_completions_from_markdown(text: str) -> dict[str, bool]:
 
         # Determine completion
         done = False
-
-        m_cb = CHECKBOX_RE.match(line)
+        
+        norm_line = line.lstrip("\ufeff")  # remove BOM if present
+        m_cb = CHECKBOX_RE.match(norm_line)
         if m_cb:
             done = (m_cb.group("mark").lower() == "x")
 
