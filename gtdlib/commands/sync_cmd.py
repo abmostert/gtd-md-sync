@@ -5,8 +5,7 @@ import re
 
 from gtdlib.store import load_master, save_master, utc_now_iso, VIEWS_DIRNAME
 
-
-ID_COMMENT_RE = re.compile(r"<!--\s*id:(?P<id>[ap]_[0-9a-f]{8})\s*-->")
+ID_COMMENT_RE = re.compile(r"<!--\s*id:(?P<id>[^>]+?)\s*-->")
 CHECKBOX_RE = re.compile(r"^\s*[-*+]\s*\[(?P<mark>[ xX])\]\s*(?P<text>.*)$")
 
 
@@ -24,7 +23,7 @@ def _extract_completions_from_markdown(text: str) -> dict[str, bool]:
         m_id = ID_COMMENT_RE.search(line)
         if not m_id:
             continue
-        item_id = m_id.group("id")
+        item_id = m_id.group("id").strip().replace("\\_", "_")
 
         # Determine completion
         done = False
