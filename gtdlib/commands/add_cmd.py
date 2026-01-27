@@ -25,10 +25,10 @@ def cmd_add(base_dir: Path) -> int:
     """
 
     def choose_project_id(projects: dict, *, allow_states: set[str] | None = None) -> str | None:
-    """
-    Return a project_id (e.g. 'p_abcd1234') or None for standalone.
-    allow_states: if provided, only show projects whose state is in allow_states.
-    """
+        """
+        Return a project_id (e.g. 'p_abcd1234') or None for standalone.
+        allow_states: if provided, only show projects whose state is in allow_states.
+        """
         # Filter projects for display
         rows: list[tuple[str, str]] = []
         for pid, p in projects.items():
