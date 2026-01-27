@@ -24,6 +24,44 @@ def cmd_add(base_dir: Path) -> int:
     - Includes a preview + confirm step: Save / Redo / Cancel.
     """
 
+    def choose_project_id(projects: dict, *, allow_states: set[str] | None = None) -> str | None:
+    """
+    Return a project_id (e.g. 'p_abcd1234') or None for standalone.
+    allow_states: if provided, only show projects whose state is in allow_states.
+    """
+        # Filter projects for display
+        rows: list[tuple[str, str]] = []
+        for pid, p in projects.items():
+            state = (p.get("state") or "").strip().lower()
+            if allow_states and state not in allow_states:
+                continue
+            title = (p.get("title") or "").strip()
+            if not title:
+                title = pid
+            rows.append((pid, title))
+
+        rows.sort(key=lambda t: t[1].lower())
+
+        print("\nAssociate this action with a project?")
+        print("  0. None (standalone action)")
+        if not rows:
+            return None
+
+        for i, (_, title) in enumerate(rows, start=1):
+            print(f"  {i}. {title}")
+
+        while True:
+            raw = input("Choose project (number): ").strip()
+            if raw == "" or raw == "0":
+                return None
+            if raw.isdigit():
+                idx = int(raw)
+                if 1 <= idx <= len(rows):
+                    return rows[idx - 1][0]
+            print("Invalid choice. Enter 0 for none, or a number from the list.")
+
+
+    
     def choose_context(contexts: list[str]) -> str:
         """
         Force selection from configured contexts.
@@ -87,6 +125,7 @@ def cmd_add(base_dir: Path) -> int:
                 print("Action title is required.")
                 continue
 
+            project_id = choose_project_id(master.get("projects", {}), allow_states={"active"})
             context = choose_context(contexts)
             state = prompt("State (active/someday/waiting/completed/dropped): ", default="active")
             due = prompt_optional_date("Due date")
@@ -104,6 +143,10 @@ def cmd_add(base_dir: Path) -> int:
                 "notes": notes,
             }
 
+            if project_id:
+                draft["project"] = project_id
+
+            
             print("\n--- Action preview ---")
             print(f"Title:   {draft['title']}")
             print(f"State:   {draft['state']}")
