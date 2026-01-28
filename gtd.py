@@ -32,6 +32,7 @@ def main() -> int:
 
     p_sync = sub.add_parser("sync", help="Import checkbox completions from Markdown into master.json")
     p_sync.add_argument("--dir", default=".", help="GTD workspace directory (default: current directory)")
+    p_sync.add_argument("--no-prompt-next", action="store_true", help="Do not prompt for next actions after sync")
 
     p_context = sub.add_parser("context", help="Manage allowed contexts")
     p_context.add_argument("--dir", default=".", help="GTD workspace directory (default: current directory)")
