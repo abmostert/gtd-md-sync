@@ -142,7 +142,7 @@ def _extract_completions_from_markdown(text: str) -> dict[str, bool]:
     return results
 
 
-def cmd_sync(base_dir: Path) -> int:
+def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
     """
     Read checkbox completions from Markdown views and update master.json.
     This is intentionally non-interactive in v1.
@@ -193,18 +193,19 @@ def cmd_sync(base_dir: Path) -> int:
                 completed_projects += 1
 
     # Prompt for next actions on stalled active projects
-    for pid, p in projects.items():
-        if p.get("state") != "active":
-            continue
+    if prompt_next:
+        for pid, p in projects.items():
+            if p.get("state") != "active":
+                continue
 
-        # Count active actions for this project
-        active_count = 0
-        for a in actions.values():
-            if a.get("project") == pid and a.get("state") == "active":
-                active_count += 1
+            # Count active actions for this project
+            active_count = 0
+            for a in actions.values():
+                if a.get("project") == pid and a.get("state") == "active":
+                    active_count += 1
 
-        if active_count == 0:
-            _create_next_action_for_project(master, base_dir, pid)
+            if active_count == 0:
+                _create_next_action_for_project(master, base_dir, pid)
 
 
     # Optional: auto-complete projects when no active actions remain (OFF by default)
