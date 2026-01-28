@@ -63,7 +63,7 @@ def main() -> int:
 
     if args.cmd == "sync":
         base_dir = Path(args.dir).expanduser().resolve()
-        return cmd_sync(base_dir)
+        return cmd_sync(base_dir, prompt_next=not args.no_prompt_next)
 
     if args.cmd == "context":
         base_dir = Path(args.dir).expanduser().resolve()
