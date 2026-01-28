@@ -42,7 +42,7 @@ def _create_next_action_for_project(master: dict, base_dir, project_id: str) -> 
 
     # Reuse existing ID creation
     import secrets
-    new_id = new_id("a")
+    aid = new_id("a")
 
     
     now = utc_now_iso() if "utc_now_iso" in dir(__import__("gtdlib.store")) else None
@@ -59,9 +59,9 @@ def _create_next_action_for_project(master: dict, base_dir, project_id: str) -> 
     if due:
         action["due"] = due
 
-    actions[new_id] = action
+    actions[aid] = action
     master["actions"] = actions
-    return new_id
+    return aid
 
 
 def _count_active_actions_for_project(actions: dict, project_id: str) -> int:
