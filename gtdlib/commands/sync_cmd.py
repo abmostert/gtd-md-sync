@@ -192,6 +192,21 @@ def cmd_sync(base_dir: Path) -> int:
                 p["completed"] = now
                 completed_projects += 1
 
+    # Prompt for next actions on stalled active projects
+    for pid, p in projects.items():
+        if p.get("state") != "active":
+            continue
+
+        # Count active actions for this project
+        active_count = 0
+        for a in actions.values():
+            if a.get("project") == pid and a.get("state") == "active":
+                active_count += 1
+
+        if active_count == 0:
+            _create_next_action_for_project(master, base_dir, pid)
+
+
     # Optional: auto-complete projects when no active actions remain (OFF by default)
     # (We can add a flag later, e.g. --auto-complete-projects)
 
