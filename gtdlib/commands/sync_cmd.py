@@ -2,12 +2,113 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
+from datetime import date
 
-from gtdlib.store import load_master, save_master, utc_now_iso, VIEWS_DIRNAME
+from gtdlib.store import (
+    load_master,
+    save_master,
+    utc_now_iso,
+    VIEWS_DIRNAME,
+    ensure_config,
+    normalize_context,
+    new_id,
+)
 
 ID_COMMENT_RE = re.compile(r"<!--\s*id:(?P<id>[^>]+?)\s*-->")
 CHECKBOX_RE = re.compile(r"^\s*[-*+]\s*\[(?P<mark>[ xX])\]\s*(?P<text>.*)$")
 
+def _create_next_action_for_project(master: dict, base_dir, project_id: str) -> str | None:
+    projects = master.get("projects", {})
+    actions = master.get("actions", {})
+
+    proj = projects.get(project_id)
+    if not proj:
+        return None
+
+    title = (proj.get("title") or project_id).strip()
+
+    print(f"\nProject stalled: {title}")
+    ans = input("Add a next action now? [Y/n]: ").strip().lower()
+    if ans in ("n", "no"):
+        return None
+
+    a_title = input("Next action title: ").strip()
+    if not a_title:
+        print("No title entered. Skipping.")
+        return None
+
+    context = _choose_context_from_config(base_dir)
+    due = _prompt_due_date()
+
+    # Reuse existing ID creation
+    import secrets
+    new_id = new_id("a")
+
+    
+    now = utc_now_iso() if "utc_now_iso" in dir(__import__("gtdlib.store")) else None
+
+    action = {
+        "title": a_title,
+        "context": context,
+        "state": "active",
+        "project": project_id,
+    }
+    if now:
+        action["created"] = now
+        action["updated"] = now
+    if due:
+        action["due"] = due
+
+    actions[new_id] = action
+    master["actions"] = actions
+    return new_id
+
+
+def _count_active_actions_for_project(actions: dict, project_id: str) -> int:
+    n = 0
+    for a in actions.values():
+        if a.get("project") != project_id:
+            continue
+        if a.get("state") == "active":
+            n += 1
+    return n
+
+
+def _choose_context_from_config(base_dir) -> str:
+    cfg = ensure_config(base_dir)
+    contexts = [normalize_context(c) for c in cfg.get("contexts", [])]
+    contexts = sorted(set(contexts))
+    if not contexts:
+        # Fallback (shouldn't happen if config exists)
+        return "inbox"
+
+    print("\nChoose context:")
+    for i, c in enumerate(contexts, start=1):
+        print(f"  {i}. {c}")
+
+    while True:
+        raw = input("Context (number or name): ").strip()
+        if raw.isdigit():
+            idx = int(raw)
+            if 1 <= idx <= len(contexts):
+                return contexts[idx - 1]
+        cand = normalize_context(raw)
+        if cand in contexts:
+            return cand
+        print("Invalid context. Choose a number from the list or type an exact context name.")
+
+
+def _prompt_due_date() -> str | None:
+    raw = input("Due date (YYYY-MM-DD, blank for none): ").strip()
+    if not raw:
+        return None
+    # Keep it simple: accept ISO date only
+    try:
+        date.fromisoformat(raw)
+        return raw
+    except ValueError:
+        print("Invalid date format. Skipping due date.")
+        return None
 
 def _extract_completions_from_markdown(text: str) -> dict[str, bool]:
     """
