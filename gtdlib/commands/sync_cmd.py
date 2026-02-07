@@ -17,9 +17,9 @@ from gtdlib.store import (
 ID_COMMENT_RE = re.compile(r"<!--\s*id:(?P<id>[^>]+?)\s*-->")
 CHECKBOX_RE = re.compile(r"^\s*[-*+]\s*\[(?P<mark>[ xX])\]\s*(?P<text>.*)$")
 
-def _create_next_action_for_project(master: dict, base_dir, project_id: str) -> str | None:
+def _create_next_action_for_project(master: dict, base_dir, project_id: str, actions: dict) -> str | None:
     projects = master.get("projects", {})
-    actions = master.get("actions", {})
+    
 
     proj = projects.get(project_id)
     if not proj:
@@ -41,7 +41,6 @@ def _create_next_action_for_project(master: dict, base_dir, project_id: str) -> 
     due = _prompt_due_date()
 
     # Reuse existing ID creation
-    import secrets
     aid = new_id("a")
 
     
@@ -60,7 +59,6 @@ def _create_next_action_for_project(master: dict, base_dir, project_id: str) -> 
         action["due"] = due
 
     actions[aid] = action
-    master["actions"] = actions
     return aid
 
 
@@ -160,6 +158,7 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
         views_dir / "next_actions.md",
         views_dir / "projects.md",
         views_dir / "someday.md",
+        views_dir / "waiting_for.md",
     ]
 
     completion_map: dict[str, bool] = {}
@@ -199,13 +198,9 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
                 continue
 
             # Count active actions for this project
-            active_count = 0
-            for a in actions.values():
-                if a.get("project") == pid and a.get("state") == "active":
-                    active_count += 1
+            if _count_active_actions_for_project(actions, pid) == 0:
+                _create_next_action_for_project(master, base_dir, pid, actions)
 
-            if active_count == 0:
-                _create_next_action_for_project(master, base_dir, pid)
 
 
     # Optional: auto-complete projects when no active actions remain (OFF by default)
