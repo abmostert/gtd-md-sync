@@ -126,3 +126,47 @@ def _build_someday(views_dir: Path, projects: dict, actions: dict) -> None:
         "\n".join(lines).strip() + "\n",
         encoding="utf-8",
     )
+
+def _build_waiting_for(views_dir: Path, actions: dict, projects: dict) -> None:
+    lines: list[str] = ["# Waiting For", ""]
+
+    # Collect waiting actions
+    items: list[tuple[str, dict]] = []
+    for aid, a in actions.items():
+        if a.get("state") == "waiting":
+            items.append((aid, a))
+
+    if not items:
+        lines.append("_No waiting items._")
+        (views_dir / "waiting_for.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return
+
+    # Group by waiting_for
+    groups: dict[str, list[tuple[str, dict]]] = {}
+    for aid, a in items:
+        who = (a.get("waiting_for") or "Unspecified").strip()
+        groups.setdefault(who, []).append((aid, a))
+
+    for who in sorted(groups.keys(), key=str.lower):
+        lines.append(f"## {who}")
+        lines.append("")
+        for aid, a in sorted(groups[who], key=lambda t: (t[1].get("due") or "", t[1].get("title") or "")):
+            title = (a.get("title") or "").strip()
+
+            # Optional project label
+            proj_label = ""
+            pid = a.get("project")
+            if pid and pid in projects:
+                ptitle = (projects[pid].get("title") or "").strip()
+                if ptitle:
+                    proj_label = f" [{ptitle}]"
+
+            # Optional due suffix (match your existing style if you have a formatter)
+            due = a.get("due")
+            due_suffix = f" (due {due})" if due else ""
+
+            lines.append(f"- [ ] {title}{proj_label}{due_suffix} {_id_comment(aid)}")
+        lines.append("")
+
+    (views_dir / "waiting_for.md").write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+
