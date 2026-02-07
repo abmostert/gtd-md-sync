@@ -10,6 +10,7 @@ from gtdlib.commands.init_cmd import cmd_init
 from gtdlib.commands.build_cmd import cmd_build
 from gtdlib.commands.sync_cmd import cmd_sync
 from gtdlib.commands.context_cmd import cmd_context_list, cmd_context_add, cmd_context_drop
+from gtdlib.commands.project_cmd import cmd_project_list, cmd_project_edit
 
 
 
@@ -46,6 +47,13 @@ def main() -> int:
     p_c_drop = subc.add_parser("drop", help="Drop a context")
     p_c_drop.add_argument("name", help="Context name to remove")
 
+    p_project = sub.add_parser("project", help="Project operations")
+    subp = p_project.add_subparsers(dest="proj_cmd", required=True)
+
+    subp.add_parser("list", help="List projects")
+    subp.add_parser("edit", help="Edit a project (and optionally add actions)")
+
+
     args = parser.parse_args()
 
     if args.cmd == "init":
@@ -73,6 +81,13 @@ def main() -> int:
             return cmd_context_add(base_dir, args.name)
         if args.context_cmd == "drop":
             return cmd_context_drop(base_dir, args.name)
+
+    if args.cmd == "project":
+        if args.proj_cmd == "list":
+            return cmd_project_list(base_dir)
+        if args.proj_cmd == "edit":
+            return cmd_project_edit(base_dir)
+
 
 
     return 0
