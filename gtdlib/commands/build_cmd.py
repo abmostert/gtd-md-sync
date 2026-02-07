@@ -27,6 +27,8 @@ def cmd_build(base_dir: Path) -> int:
     _build_next_actions(views_dir, actions, projects)
     _build_projects(views_dir, projects, actions)
     _build_someday(views_dir, projects, actions)
+    _build_waiting_for(views_dir, actions, projects)
+
 
     print("Views rebuilt.")
     return 0
