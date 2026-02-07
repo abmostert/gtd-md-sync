@@ -48,10 +48,11 @@ def main() -> int:
     p_c_drop.add_argument("name", help="Context name to remove")
 
     p_project = sub.add_parser("project", help="Project operations")
-    subp = p_project.add_subparsers(dest="proj_cmd", required=True)
+    p_project.add_argument("--dir", default=".", help="GTD workspace directory (default: current directory)")
+    proj = p_project.add_subparsers(dest="proj_cmd", required=True)
 
-    subp.add_parser("list", help="List projects")
-    subp.add_parser("edit", help="Edit a project (and optionally add actions)")
+    p_proj_list = proj.add_parser("list", help="List projects")
+    p_proj_edit = proj.add_parser("edit", help="Edit a project")
 
 
     args = parser.parse_args()
@@ -83,6 +84,7 @@ def main() -> int:
             return cmd_context_drop(base_dir, args.name)
 
     if args.cmd == "project":
+        base_dir = Path(args.dir).expanduser().resolve()
         if args.proj_cmd == "list":
             return cmd_project_list(base_dir)
         if args.proj_cmd == "edit":
