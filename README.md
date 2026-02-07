@@ -1,6 +1,5 @@
 # gtd-md-sync
 
-
 A small, local-first **Getting Things Done (GTD)** command-line tool that keeps a single source of truth in JSON and generates human-friendly Markdown views for daily use — with reliable round-trip sync back into the data.
 
 This tool is designed for people who want:
@@ -9,6 +8,7 @@ This tool is designed for people who want:
 - **plain text Markdown** for day-to-day work (including mobile)
 - no vendor lock-in
 - explicit, predictable workflows
+- full ownership of their GTD system
 
 ---
 
@@ -18,24 +18,52 @@ This tool is designed for people who want:
 - **Markdown files are views, not data**
 - You work from Markdown
 - The tool syncs completed items back into JSON
+- Views are regenerated safely at any time
 
 ```text
-add → master.json → build → views/*.md
-                              ↑
-                             sync
+add / edit → master.json → build → views/*.md
+                                    ↑
+                                   sync
 ```
 
 ---
 
-## Features (v1)
+## Features (current version)
 
-- Projects, actions, and Someday/Maybe items
-- Stable IDs embedded in Markdown (safe sync)
-- Context-based Next Actions lists
-- Project labels shown next to actions
-- Explicit build and sync steps (no background magic)
-- Configurable, enforced context list
+### Core GTD functionality
+
+- Projects with explicit outcomes
+- Multiple parallel Next Actions per project
+- Standalone actions (not tied to a project)
+- Someday / Maybe items
+- Waiting For items with explicit tracking
+- Agenda lists for meetings and people
+- Automatic detection of stalled projects
+
+### Markdown views generated
+
+- `views/next_actions.md` — active actions grouped by context
+- `views/projects.md` — all projects overview
+- `views/someday.md` — someday / maybe items
+- `views/waiting_for.md` — items waiting on external input
+- `views/agenda.md` — meeting/person-specific agenda items
+- `views/stalled_projects.md` — active projects with no next action
+
+### Workflow automation
+
+- Stable IDs embedded in Markdown (safe round-trip sync)
+- Tick checkboxes in Markdown and sync back to JSON
+- Automatic prompt to add next actions when projects stall
+- Enforced context list to prevent fragmentation
+- Explicit project editing and action creation tools
+
+### Design and reliability
+
 - Fully local, Python standard library only
+- No background processes
+- Explicit commands — nothing happens silently
+- Data stored in simple, readable JSON
+- Safe to sync Markdown via cloud storage (Proton, Google Drive, Dropbox, etc.)
 
 ---
 
@@ -50,7 +78,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 ```
 
-No external Python dependencies are required.
+No external dependencies required.
 
 ---
 
@@ -58,38 +86,42 @@ No external Python dependencies are required.
 
 ### 1. Initialise a GTD workspace
 
-Choose where your GTD data should live (outside the repo):
+Choose where your GTD data should live (recommended: outside the repo):
 
 ```bash
 python3 gtd.py init --dir ~/GTD
 ```
 
-This creates:
+Creates:
 
-- `master.json` — the database
-- `views/` — generated Markdown views
-- `config.json` — contexts and future settings
+- `master.json` — database
+- `config.json` — context configuration
+- `views/` — Markdown output folder
 
 ---
 
 ### 2. Manage contexts
 
-List available contexts:
+Contexts define where actions can be performed.
+
+List contexts:
 
 ```bash
 python3 gtd.py context --dir ~/GTD list
 ```
 
-Add a new context:
+Add context:
 
 ```bash
-python3 gtd.py context --dir ~/GTD add deep_work
+python3 gtd.py context --dir ~/GTD add home
+python3 gtd.py context --dir ~/GTD add work
+python3 gtd.py context --dir ~/GTD add agenda_team
 ```
 
-Drop a context:
+Drop context:
 
 ```bash
-python3 gtd.py context --dir ~/GTD drop agenda
+python3 gtd.py context --dir ~/GTD drop errands
 ```
 
 Contexts are enforced when adding actions.
@@ -102,75 +134,177 @@ Contexts are enforced when adding actions.
 python3 gtd.py add --dir ~/GTD
 ```
 
-You can add:
+You can create:
 
 - standalone actions
-- projects (with an initial next action)
-- Someday / Maybe items
+- project-linked actions
+- new projects with initial next action
+- waiting-for items
+- someday items
+- agenda items (using agenda_* contexts)
 
 ---
 
-### 4. Build Markdown views
+### 4. Edit projects and add actions
+
+List projects:
+
+```bash
+python3 gtd.py project list --dir ~/GTD
+```
+
+Edit project and optionally add actions:
+
+```bash
+python3 gtd.py project edit --dir ~/GTD
+```
+
+You can change:
+
+- title
+- state (active / someday / completed / dropped)
+- due date
+- notes
+- add one or more next actions
+
+---
+
+### 5. Build Markdown views
 
 ```bash
 python3 gtd.py build --dir ~/GTD
 ```
 
-This generates:
+Generates all Markdown views:
 
-- `views/next_actions.md`
-- `views/projects.md`
-- `views/someday.md`
+```
+views/
+  next_actions.md
+  projects.md
+  someday.md
+  waiting_for.md
+  agenda.md
+  stalled_projects.md
+```
 
-These files are intended to be:
+These files are safe to:
 
 - read daily
-- reordered freely
-- ticked off
-- synced via cloud storage if desired
+- reorder
+- sync via cloud storage
+- check off tasks
 
 ---
 
-### 5. Complete actions and sync back
+### 6. Complete actions and sync back
 
-In the Markdown files:
+In any Markdown view:
 
-- tick a checkbox `[x]`, or
+- tick checkbox `[x]`, or
 - append `XXX` to a line
 
-Then run:
+Then sync:
 
 ```bash
 python3 gtd.py sync --dir ~/GTD
 python3 gtd.py build --dir ~/GTD
 ```
 
-Completed items are removed from active views.
+Sync will:
+
+- mark items completed in JSON
+- detect stalled projects
+- optionally prompt for next actions
+
+---
+
+## Recommended daily workflow
+
+Typical loop:
+
+```bash
+python3 gtd.py build --dir ~/GTD
+```
+
+Work from:
+
+- next_actions.md
+- agenda.md
+- waiting_for.md
+
+After completing items:
+
+```bash
+python3 gtd.py sync --dir ~/GTD
+python3 gtd.py build --dir ~/GTD
+```
+
+---
+
+## File structure overview
+
+Workspace example:
+
+```
+~/GTD/
+  master.json
+  config.json
+  views/
+    next_actions.md
+    projects.md
+    someday.md
+    waiting_for.md
+    agenda.md
+    stalled_projects.md
+```
+
+Repository example:
+
+```
+gtd-md-sync/
+  gtd.py
+  gtdlib/
+  README.md
+```
 
 ---
 
 ## Design principles
 
-- **One source of truth**: JSON, not Markdown
-- **Views are disposable**
-- **Explicit commands over automation**
-- **Schema evolves additively**
-- **Failure-safe over clever**
+This tool follows strict design constraints:
 
-This is a tool you should be able to understand completely by reading the files it creates.
+- **Single source of truth**: master.json
+- **Markdown is a view layer**
+- **No hidden automation**
+- **Fully inspectable and understandable**
+- **Local-first and tool-agnostic**
+- **Safe schema evolution**
+
+The system is designed to remain usable and understandable indefinitely.
 
 ---
 
 ## Status
 
-This is an early but fully functional prototype used for real GTD workflows.
+This is a functional, production-usable GTD system.
+
+Currently implemented:
+
+- full GTD capture and clarify workflow
+- projects and next actions
+- waiting-for tracking
+- agenda lists
+- stalled project detection
+- project editing
+- safe Markdown sync
 
 Planned improvements:
 
-- activate / drop commands
+- improved project search and filtering
+- richer project editing display
+- review assistant commands
 - schema versioning and migrations
-- weekly review helpers
-- additional views (waiting, overdue, etc.)
+- optional cloud sync helpers
 
 ---
 
