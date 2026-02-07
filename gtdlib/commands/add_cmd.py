@@ -128,6 +128,12 @@ def cmd_add(base_dir: Path) -> int:
             project_id = choose_project_id(master.get("projects", {}), allow_states={"active"})
             context = choose_context(contexts)
             state = prompt("State (active/someday/waiting/completed/dropped): ", default="active")
+            waiting_for = None
+            if state == "waiting":
+                waiting_for = prompt("Waiting for (person/thing): ")
+                if not waiting_for:
+                    waiting_for = "unspecified"
+
             due = prompt_optional_date("Due date")
             notes = prompt("Notes (optional): ", default="")
 
@@ -139,6 +145,7 @@ def cmd_add(base_dir: Path) -> int:
                 "created": now,
                 "last_touched": now,
                 "waiting_since": now if state == "waiting" else None,
+                "waiting_for": waiting_for,
                 "due": due,
                 "notes": notes,
             }
@@ -151,6 +158,7 @@ def cmd_add(base_dir: Path) -> int:
             print(f"Title:   {draft['title']}")
             print(f"State:   {draft['state']}")
             print(f"Context: {draft['context']}")
+            print(f"Waiting: {draft.get('waiting_for')}")
             print(f"Due:     {draft['due']}")
             print(f"Notes:   {draft['notes']}")
             print("----------------------\n")
@@ -188,7 +196,7 @@ def cmd_add(base_dir: Path) -> int:
             print("First next action is required for a project.")
             continue
 
-        first_context = prompt("Context for that next action: ", default="inbox")
+        first_context = choose_context(contexts)
         first_due = prompt_optional_date("Due date for that next action")
         first_notes = prompt("Notes for that next action (optional): ", default="")
 
@@ -205,6 +213,13 @@ def cmd_add(base_dir: Path) -> int:
         }
 
         action_state = "active" if project_state == "active" else project_state
+
+        first_waiting_for = None
+        if action_state == "waiting":
+            first_waiting_for = prompt("Waiting for (person/thing): ")
+            if not first_waiting_for:
+                first_waiting_for = "unspecified"
+        
         action_draft = {
             "title": first_action,
             "project": pid,
@@ -213,6 +228,7 @@ def cmd_add(base_dir: Path) -> int:
             "created": now,
             "last_touched": now,
             "waiting_since": now if action_state == "waiting" else None,
+            "waiting_for": first_waiting_for,
             "due": first_due,
             "notes": first_notes,
         }
