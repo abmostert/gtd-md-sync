@@ -29,6 +29,8 @@ def cmd_build(base_dir: Path) -> int:
     _build_someday(views_dir, projects, actions)
     _build_waiting_for(views_dir, actions, projects)
     _build_agenda(views_dir, actions, projects)
+    _build_stalled_projects(views_dir, actions, projects)
+
 
 
     print("Views rebuilt.")
@@ -213,5 +215,38 @@ def _build_agenda(views_dir: Path, actions: dict, projects: dict) -> None:
         lines.append("")
 
     (views_dir / "agenda.md").write_text("\n".join(lines).strip() + "\n", encoding="utf-8")
+
+
+def _build_stalled_projects(views_dir: Path, actions: dict, projects: dict) -> None:
+    lines: list[str] = ["# Stalled Projects", ""]
+
+    stalled: list[tuple[str, dict]] = []
+    for pid, p in projects.items():
+        if p.get("state") != "active":
+            continue
+
+        active_count = 0
+        for a in actions.values():
+            if a.get("project") == pid and a.get("state") == "active":
+                active_count += 1
+
+        if active_count == 0:
+            stalled.append((pid, p))
+
+    if not stalled:
+        lines.append("_No stalled projects._")
+        (views_dir / "stalled_projects.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return
+
+    stalled.sort(key=lambda t: (t[1].get("due") or "9999-12-31", t[1].get("title") or ""))
+
+    for pid, p in stalled:
+        title = (p.get("title") or "").strip()
+        due = p.get("due")
+        due_suffix = f" (due {due})" if due else ""
+        lines.append(f"- {title}{due_suffix} {_id_comment(pid)}")
+
+    (views_dir / "stalled_projects.md").write_text("\n".join(lines).strip() + "\n", encoding="utf-8")
+
 
 
