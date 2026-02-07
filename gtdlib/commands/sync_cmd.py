@@ -159,6 +159,7 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
         views_dir / "projects.md",
         views_dir / "someday.md",
         views_dir / "waiting_for.md",
+        views_dir / "agenda.md",
     ]
 
     completion_map: dict[str, bool] = {}
