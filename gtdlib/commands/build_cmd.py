@@ -28,6 +28,7 @@ def cmd_build(base_dir: Path) -> int:
     _build_projects(views_dir, projects, actions)
     _build_someday(views_dir, projects, actions)
     _build_waiting_for(views_dir, actions, projects)
+    _build_agenda(views_dir, actions, projects)
 
 
     print("Views rebuilt.")
@@ -171,4 +172,46 @@ def _build_waiting_for(views_dir: Path, actions: dict, projects: dict) -> None:
         lines.append("")
 
     (views_dir / "waiting_for.md").write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+
+
+def _build_agenda(views_dir: Path, actions: dict, projects: dict) -> None:
+    lines: list[str] = ["# Agenda", ""]
+
+    agenda_items: list[tuple[str, dict]] = []
+    for aid, a in actions.items():
+        if a.get("state") != "active":
+            continue
+        ctx = (a.get("context") or "").strip()
+        if ctx.startswith("agenda_"):
+            agenda_items.append((aid, a))
+
+    if not agenda_items:
+        lines.append("_No agenda items._")
+        (views_dir / "agenda.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return
+
+    # Group by agenda target (context name after agenda_)
+    groups: dict[str, list[tuple[str, dict]]] = {}
+    for aid, a in agenda_items:
+        ctx = (a.get("context") or "").strip()
+        who = ctx[len("agenda_"):].strip() or "unspecified"
+        groups.setdefault(who, []).append((aid, a))
+
+    for who in sorted(groups.keys(), key=str.lower):
+        lines.append(f"## {who}")
+        lines.append("")
+        items = sorted(groups[who], key=lambda t: ((t[1].get("due") or "9999-12-31"), t[1].get("title") or ""))
+        for aid, a in items:
+            due = f" (due {a['due']})" if a.get("due") else ""
+            proj_label = ""
+            pid = a.get("project")
+            if pid and pid in projects:
+                pt = (projects[pid].get("title") or "").strip()
+                if pt:
+                    proj_label = f" [{pt}]"
+            lines.append(f"- [ ] {a.get('title','')}{proj_label}{due} {_id_comment(aid)}")
+        lines.append("")
+
+    (views_dir / "agenda.md").write_text("\n".join(lines).strip() + "\n", encoding="utf-8")
+
 
