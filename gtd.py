@@ -11,6 +11,8 @@ from gtdlib.commands.build_cmd import cmd_build
 from gtdlib.commands.sync_cmd import cmd_sync
 from gtdlib.commands.context_cmd import cmd_context_list, cmd_context_add, cmd_context_drop
 from gtdlib.commands.project_cmd import cmd_project_list, cmd_project_edit
+from gtdlib.commands.capture_cmd import cmd_capture
+
 
 
 
@@ -54,6 +56,12 @@ def main() -> int:
     p_proj_list = proj.add_parser("list", help="List projects")
     p_proj_edit = proj.add_parser("edit", help="Edit a project")
 
+    p_capture = sub.add_parser("capture", help="Capture emails via IMAP into inbox/inbox.md")
+    p_capture.add_argument("--dir", default=".", help="GTD workspace directory (default: current directory)")
+    p_capture.add_argument("--dry-run", action="store_true", help="Do not write or delete; just count")
+    p_capture.add_argument("--all", action="store_true", help="Capture ALL messages (not just UNSEEN)")
+
+
 
     args = parser.parse_args()
 
@@ -89,6 +97,11 @@ def main() -> int:
             return cmd_project_list(base_dir)
         if args.proj_cmd == "edit":
             return cmd_project_edit(base_dir)
+
+    if args.cmd == "capture":
+        base_dir = Path(args.dir).expanduser().resolve()
+        return cmd_capture(base_dir, dry_run=args.dry_run, all_mail=args.all)
+
 
 
 
