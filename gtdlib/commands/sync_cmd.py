@@ -17,6 +17,49 @@ from gtdlib.store import (
 ID_COMMENT_RE = re.compile(r"<!--\s*id:(?P<id>[^>]+?)\s*-->")
 CHECKBOX_RE = re.compile(r"^\s*[-*+]\s*\[(?P<mark>[ xX])\]\s*(?P<text>.*)$")
 
+
+def _prune_checked_inbox_md(inbox_md: Path) -> int:
+    """
+    Remove any top-level '- [x]' items and their indented continuation lines.
+    Returns number of removed items.
+    """
+    if not inbox_md.exists():
+        return 0
+
+    lines = inbox_md.read_text(encoding="utf-8").splitlines()
+    out: list[str] = []
+    removed = 0
+    i = 0
+
+    def is_top_item(line: str) -> bool:
+        s = line.lstrip("\ufeff")
+        return s.startswith("- [")  # top-level list item
+
+    while i < len(lines):
+        line = lines[i]
+        s = line.lstrip("\ufeff")
+
+        if s.startswith("- [x]") or s.startswith("- [X]"):
+            removed += 1
+            i += 1
+            # skip continuation lines until next top-level item or EOF
+            while i < len(lines) and (not is_top_item(lines[i]) and lines[i].strip() != "- [ ]" ):
+                # continuation lines usually start with two spaces, but we just skip until next '- ['
+                if is_top_item(lines[i]):
+                    break
+                i += 1
+            # also skip blank lines immediately following the item block
+            while i < len(lines) and lines[i].strip() == "":
+                i += 1
+            continue
+
+        out.append(line)
+        i += 1
+
+    inbox_md.write_text("\n".join(out).rstrip() + "\n", encoding="utf-8")
+    return removed
+
+
 def _create_next_action_for_project(master: dict, base_dir, project_id: str, actions: dict) -> str | None:
     projects = master.get("projects", {})
     
@@ -202,6 +245,10 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
             if _count_active_actions_for_project(actions, pid) == 0:
                 _create_next_action_for_project(master, base_dir, pid, actions)
 
+    # Also prune completed capture items from inbox/inbox.md (no IDs; purely structural)
+    pruned = _prune_checked_inbox_md(base_dir / "inbox" / "inbox.md")
+    if pruned:
+        print(f"Pruned {pruned} checked capture item(s) from inbox/inbox.md")
 
 
     # Optional: auto-complete projects when no active actions remain (OFF by default)
