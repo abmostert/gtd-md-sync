@@ -9,6 +9,54 @@ from pathlib import Path
 from datetime import datetime, timezone
 import getpass
 import re
+import html as _html
+
+_SCRIPT_STYLE_RE = re.compile(r"(?is)<(script|style).*?>.*?</\1>")
+_TAG_RE = re.compile(r"(?s)<[^>]+>")
+_WS_RE = re.compile(r"[ \t]+")
+_MULTI_NL_RE = re.compile(r"\n{3,}")
+
+def _html_to_text(s: str) -> str:
+    if not s:
+        return ""
+
+    # remove scripts/styles
+    s = _SCRIPT_STYLE_RE.sub("", s)
+
+    # convert common block-ish tags to newlines
+    s = re.sub(r"(?i)<br\s*/?>", "\n", s)
+    s = re.sub(r"(?i)</(p|div|tr|li|h1|h2|h3|h4|h5|h6)>", "\n", s)
+    s = re.sub(r"(?i)<hr\b.*?>", "\n---\n", s)
+
+    # strip remaining tags
+    s = _TAG_RE.sub("", s)
+
+    # unescape entities
+    s = _html.unescape(s)
+
+    # normalize whitespace
+    s = s.replace("\r\n", "\n").replace("\r", "\n")
+    s = _WS_RE.sub(" ", s)
+    s = "\n".join(line.strip() for line in s.splitlines())
+    s = _MULTI_NL_RE.sub("\n\n", s).strip()
+
+    # remove common Proton footer noise
+    s = re.sub(r"(?i)sent with proton mail.*$", "", s).strip()
+
+    # hard cut quoted/reply chains (simple heuristic)
+    cut_markers = [
+        "\nFrom:",
+        "\n-----Original Message-----",
+        "\nOn ",
+        "\nSent:",
+    ]
+    for m in cut_markers:
+        idx = s.find(m)
+        if idx != -1 and idx > 0:
+            s = s[:idx].rstrip()
+            break
+
+    return s.strip()
 
 
 def _decode_mime_header(value: str | None) -> str:
@@ -25,22 +73,54 @@ def _decode_mime_header(value: str | None) -> str:
 
 
 def _extract_text_body(msg: Message) -> str:
-    # Prefer text/plain; fallback to empty
+    # Prefer text/plain, otherwise convert text/html to plain.
+    text_plain = ""
+    text_html = ""
+
     if msg.is_multipart():
         for part in msg.walk():
             ctype = (part.get_content_type() or "").lower()
             disp = (part.get("Content-Disposition") or "").lower()
-            if ctype == "text/plain" and "attachment" not in disp:
-                payload = part.get_payload(decode=True) or b""
-                charset = part.get_content_charset() or "utf-8"
-                return payload.decode(charset, errors="replace").strip()
-        return ""
-    payload = msg.get_payload(decode=True) or b""
-    charset = msg.get_content_charset() or "utf-8"
-    return payload.decode(charset, errors="replace").strip()
+            if "attachment" in disp:
+                continue
+
+            payload = part.get_payload(decode=True) or b""
+            charset = part.get_content_charset() or "utf-8"
+            try:
+                decoded = payload.decode(charset, errors="replace")
+            except LookupError:
+                decoded = payload.decode("utf-8", errors="replace")
+
+            if ctype == "text/plain" and not text_plain:
+                text_plain = decoded.strip()
+            elif ctype == "text/html" and not text_html:
+                text_html = decoded.strip()
+    else:
+        payload = msg.get_payload(decode=True) or b""
+        charset = msg.get_content_charset() or "utf-8"
+        try:
+            decoded = payload.decode(charset, errors="replace")
+        except LookupError:
+            decoded = payload.decode("utf-8", errors="replace")
+
+        # guess if it's html-ish
+        if "<html" in decoded.lower() or "<div" in decoded.lower() or "<br" in decoded.lower():
+            text_html = decoded.strip()
+        else:
+            text_plain = decoded.strip()
+
+    if text_plain:
+        return text_plain
+
+    if text_html:
+        return _html_to_text(text_html)
+
+    return ""
+
 
 
 _filename_bad = re.compile(r"[^A-Za-z0-9.\-_ ]+")
+
 def _safe_filename(name: str) -> str:
     name = name.strip().replace("/", "_").replace("\\", "_")
     name = _filename_bad.sub("_", name)
@@ -124,6 +204,11 @@ def capture_folder_to_inbox_md(
 
             subject = _decode_mime_header(msg.get("Subject")) or "(no subject)"
             body = _extract_text_body(msg)
+            MAX_LINES = 20
+            MAX_CHARS = 2000
+            lines = [ln for ln in body.splitlines() if ln.strip()]
+            body = "\n".join(lines[:MAX_LINES])[:MAX_CHARS].strip()
+
             saved_files = _save_attachments(msg, attachments_dir)
 
             if not dry_run:
