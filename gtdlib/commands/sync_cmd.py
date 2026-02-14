@@ -130,7 +130,7 @@ def _count_active_actions_for_project(actions: dict, project_id: str) -> int:
     for a in actions.values():
         if a.get("project") != project_id:
             continue
-        if a.get("state") == "active":
+        if a.get("state") in {"active", "waiting"}:
             n += 1
     return n
 
