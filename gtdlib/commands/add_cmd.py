@@ -14,6 +14,8 @@ from gtdlib.store import (
     normalize_context,
 )
 
+from gtdlib.prompts.action_prompts import prompt_action_draft, render_action_preview
+
 
 def cmd_add(base_dir: Path) -> int:
     """
@@ -122,69 +124,37 @@ def cmd_add(base_dir: Path) -> int:
     # ACTION BRANCH
     # -------------------------
     if kind == "a":
-        while True:
-            title = prompt("Action title: ")
-            if not title:
-                print("Action title is required.")
-                continue
+    while True:
+        project_id = choose_project_id(master.get("projects", {}), allow_states={"active"})
 
-            project_id = choose_project_id(master.get("projects", {}), allow_states={"active"})
-            state = prompt("State for that next action (active/waiting/someday): ", default="active")
-            
-            if state not in {"active", "waiting", "someday"}:
-                print("Invalid state. Use active, waiting, or someday.")
-                continue
+        try:
+            draft = prompt_action_draft(
+                base_dir,
+                contexts,
+                now_iso=now,
+                project_id=project_id,
+                default_state="active",
+                ask_context_when_waiting=False,
+            )
+        except ValueError as e:
+            print(str(e))
+            continue
 
-            context = None
-            if state == "waiting":
-                waiting_for = prompt("Waiting for (person/thing): ")
-                if not waiting_for:
-                    waiting_for = "unspecified"
-            else:
-                context = choose_context(contexts)
-            
-            due = prompt_optional_date("Due date")
-            notes = prompt("Notes (optional): ", default="")
+        render_action_preview(draft)
 
-            draft = {
-                "title": title,
-                "project": None,
-                "state": state,
-                "context": context,
-                "created": now,
-                "last_touched": now,
-                "waiting_since": now if state == "waiting" else None,
-                "waiting_for": waiting_for,
-                "due": due,
-                "notes": notes,
-            }
-
-            if project_id:
-                draft["project"] = project_id
-
-            
-            print("\n--- Action preview ---")
-            print(f"Title:   {draft['title']}")
-            print(f"State:   {draft['state']}")
-            print(f"Context: {draft['context']}")
-            print(f"Waiting: {draft.get('waiting_for')}")
-            print(f"Due:     {draft['due']}")
-            print(f"Notes:   {draft['notes']}")
-            print("----------------------\n")
-
-            decision = confirm_or_redo()
-            if decision == "c":
-                print("Cancelled. Nothing saved.")
-                return 0
-            if decision == "r":
-                print("Redoing...\n")
-                continue
-
-            aid = new_id("a")
-            master.setdefault("actions", {})[aid] = draft
-            save_master(base_dir, master)
-            print(f"Added action {aid}: {title}")
+        decision = confirm_or_redo()
+        if decision == "c":
+            print("Cancelled. Nothing saved.")
             return 0
+        if decision == "r":
+            print("Redoing...\n")
+            continue
+
+        aid = new_id("a")
+        master.setdefault("actions", {})[aid] = draft
+        save_master(base_dir, master)
+        print(f"Added action {aid}: {draft['title']}")
+        return 0
 
     # -------------------------
     # PROJECT BRANCH
@@ -202,8 +172,7 @@ def cmd_add(base_dir: Path) -> int:
 
 
 
-        pid = new_id("p")
-        aid = new_id("a")
+
 
         project_draft = {
             "title": project_title,
@@ -214,60 +183,27 @@ def cmd_add(base_dir: Path) -> int:
             "notes": project_notes,
         }
 
-        first_action = prompt("First next action for this project: ")
-        if not first_action:
-            print("First next action is required for a project.")
+        try:
+            action_draft = prompt_action_draft(
+            base_dir,
+            contexts,
+            now_iso=now,
+            project_id=None,  # set after pid exists
+            default_state=("active" if project_state == "active" else "someday"),
+            ask_context_when_waiting=False,
+        )
+        except ValueError as e:
+            print(str(e))
             continue
 
-        # IMPORTANT: state is explicit (so waiting goes to waiting_for.md)
-        first_action_state = prompt(
-        "State for that next action (active/waiting/someday): ",
-        default=("active" if project_state == "active" else project_state),
-        ).strip().lower()
+        pid = new_id("p")
+        aid = new_id("a")
 
-        if first_action_state not in {"active", "waiting", "someday"}:
-            print("Invalid state. Use active, waiting, or someday.")
-            continue
+        action_draft["project"] = pid
 
-        first_context = None
-        if first_action_state == "waiting":
-            first_waiting_for = prompt("Waiting for (person/thing): ")
-            if not first_waiting_for:
-                first_waiting_for = "unspecified"
-        else:        
-            first_context = choose_context(contexts)
+        render_action_preview(action_draft)
+
         
-        first_due = prompt_optional_date("Due date for that next action")
-        first_notes = prompt("Notes for that next action (optional): ", default="")
-        
-        action_draft = {
-            "title": first_action,
-            "project": pid,
-            "state": first_action_state,
-            "context": first_context,
-            "created": now,
-            "last_touched": now,
-            "waiting_since": now if action_state == "waiting" else None,
-            "waiting_for": first_waiting_for,
-            "due": first_due,
-            "notes": first_notes,
-        }
-
-        print("\n--- Project preview ---")
-        print(f"Project ID:    {pid}")
-        print(f"Title:         {project_draft['title']}")
-        print(f"State:         {project_draft['state']}")
-        print(f"Due:           {project_draft['due']}")
-        print(f"Notes:         {project_draft['notes']}")
-        print("\n--- First action preview ---")
-        print(f"Action ID:     {aid}")
-        print(f"Title:         {action_draft['title']}")
-        print(f"State:         {action_draft['state']}")
-        print(f"Context:       {action_draft['context']}")
-        print(f"Due:           {action_draft['due']}")
-        print(f"Notes:         {action_draft['notes']}")
-        print("----------------------------\n")
-
         decision = confirm_or_redo()
         if decision == "c":
             print("Cancelled. Nothing saved.")
