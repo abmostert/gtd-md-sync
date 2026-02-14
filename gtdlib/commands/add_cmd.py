@@ -129,14 +129,20 @@ def cmd_add(base_dir: Path) -> int:
                 continue
 
             project_id = choose_project_id(master.get("projects", {}), allow_states={"active"})
-            context = choose_context(contexts)
-            state = prompt("State (active/someday/waiting/completed/dropped): ", default="active")
-            waiting_for = None
+            state = prompt("State for that next action (active/waiting/someday): ", default="active")
+            
+            if state not in {"active", "waiting", "someday"}:
+                print("Invalid state. Use active, waiting, or someday.")
+                continue
+
+            context = None
             if state == "waiting":
                 waiting_for = prompt("Waiting for (person/thing): ")
                 if not waiting_for:
                     waiting_for = "unspecified"
-
+            else:
+                context = choose_context(contexts)
+            
             due = prompt_optional_date("Due date")
             notes = prompt("Notes (optional): ", default="")
 
@@ -194,27 +200,7 @@ def cmd_add(base_dir: Path) -> int:
         project_due = prompt_optional_date("Project due date")
         project_notes = prompt("Project notes (optional): ", default="")
 
-        first_action = prompt("First next action for this project: ")
-        if not first_action:
-            print("First next action is required for a project.")
-            continue
 
-        # IMPORTANT: choose from configured contexts (same as action branch)
-        first_context = choose_context(contexts)
-
-        # IMPORTANT: state is explicit (so waiting goes to waiting_for.md)
-        first_action_state = prompt(
-        "State for that next action (active/waiting/someday): ",
-        default=("active" if project_state == "active" else project_state),
-        ).strip().lower()
-
-        if first_action_state not in {"active", "waiting", "someday"}:
-            print("Invalid state. Use active, waiting, or someday.")
-            continue
-
-        
-        first_due = prompt_optional_date("Due date for that next action")
-        first_notes = prompt("Notes for that next action (optional): ", default="")
 
         pid = new_id("p")
         aid = new_id("a")
@@ -228,13 +214,31 @@ def cmd_add(base_dir: Path) -> int:
             "notes": project_notes,
         }
 
-        action_state = "active" if project_state == "active" else project_state
+        first_action = prompt("First next action for this project: ")
+        if not first_action:
+            print("First next action is required for a project.")
+            continue
 
-        first_waiting_for = None
-        if action_state == "waiting":
+        # IMPORTANT: state is explicit (so waiting goes to waiting_for.md)
+        first_action_state = prompt(
+        "State for that next action (active/waiting/someday): ",
+        default=("active" if project_state == "active" else project_state),
+        ).strip().lower()
+
+        if first_action_state not in {"active", "waiting", "someday"}:
+            print("Invalid state. Use active, waiting, or someday.")
+            continue
+
+        first_context = None
+        if first_action_state == "waiting":
             first_waiting_for = prompt("Waiting for (person/thing): ")
             if not first_waiting_for:
                 first_waiting_for = "unspecified"
+        else:        
+            first_context = choose_context(contexts)
+        
+        first_due = prompt_optional_date("Due date for that next action")
+        first_notes = prompt("Notes for that next action (optional): ", default="")
         
         action_draft = {
             "title": first_action,
