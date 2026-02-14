@@ -73,6 +73,20 @@ def prompt_waiting_for() -> str:
     return waiting_for or "unspecified"
 
 
+def render_action_preview(draft: dict) -> None:
+    print("\n--- Action preview ---")
+    print(f"Title:   {draft.get('title')}")
+    print(f"State:   {draft.get('state')}")
+    if draft.get("state") == "waiting":
+        print(f"Waiting: {draft.get('waiting_for')}")
+    else:
+        print(f"Context: {draft.get('context')}")
+    print(f"Due:     {draft.get('due')}")
+    print(f"Notes:   {draft.get('notes')}")
+    print("----------------------\n")
+
+
+
 def prompt_action_draft(
     base_dir: Path,
     contexts: list[str],
