@@ -1,8 +1,6 @@
 
 from __future__ import annotations
-
 from pathlib import Path
-
 from gtdlib.store import (
     load_master,
     new_id,
@@ -13,9 +11,7 @@ from gtdlib.store import (
     ensure_config,
     normalize_context,
 )
-
 from gtdlib.prompts.action_prompts import prompt_action_draft, render_action_preview
-
 
 def cmd_add(base_dir: Path) -> int:
     """
@@ -61,8 +57,6 @@ def cmd_add(base_dir: Path) -> int:
                 if 1 <= idx <= len(rows):
                     return rows[idx - 1][0]
             print("Invalid choice. Enter 0 for none, or a number from the list.")
-
-
     
     def choose_context(contexts: list[str]) -> str:
         """
@@ -90,7 +84,6 @@ def cmd_add(base_dir: Path) -> int:
                 if cand in contexts:
                     return cand
             print("Invalid context. Choose a number from the list or type an exact context name.")
-
 
     def confirm_or_redo() -> str:
         """
@@ -170,10 +163,6 @@ def cmd_add(base_dir: Path) -> int:
         project_due = prompt_optional_date("Project due date")
         project_notes = prompt("Project notes (optional): ", default="")
 
-
-
-
-
         project_draft = {
             "title": project_title,
             "state": project_state,
@@ -203,7 +192,6 @@ def cmd_add(base_dir: Path) -> int:
 
         render_action_preview(action_draft)
 
-        
         decision = confirm_or_redo()
         if decision == "c":
             print("Cancelled. Nothing saved.")
