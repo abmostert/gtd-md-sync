@@ -153,6 +153,12 @@ def _choose_context_from_config(base_dir) -> str:
             if 1 <= idx <= len(contexts):
                 return contexts[idx - 1]
         cand = normalize_context(raw)
+
+        if cand in {"waiting_for", "waiting"}:
+            print("'waiting_for' is not a context (it's a state). Choose a real context like work/home/virtual.")
+            continue
+
+        
         if cand in contexts:
             return cand
         print("Invalid context. Choose a number from the list or type an exact context name.")
