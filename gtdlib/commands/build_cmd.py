@@ -167,12 +167,11 @@ def _build_waiting_for(views_dir: Path, actions: dict, projects: dict) -> None:
                     proj_label = f" [{ptitle}]"
 
             # Optional due suffix (match your existing style if you have a formatter)
-            due = a.get("due")
+            due = f" (due {a['due']})" if a.get("due") else ""
             due_suffix = f" (due {due})" if due else ""
 
-            wf = (a.get("waiting_for") or "").strip()
-            wf_txt = f" (waiting for: {wf})" if wf else ""
-            lines.append(f"- [ ] {a.get('title','')}{proj_label}{wf_txt}{due} {_id_comment(aid)}")
+            lines.append(f"- [ ] {a.get('title','')}{proj_label}{due} {_id_comment(aid)}")
+
 
         lines.append("")
 
