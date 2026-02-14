@@ -196,7 +196,20 @@ def cmd_add(base_dir: Path) -> int:
             print("First next action is required for a project.")
             continue
 
+        # IMPORTANT: choose from configured contexts (same as action branch)
         first_context = choose_context(contexts)
+
+        # IMPORTANT: state is explicit (so waiting goes to waiting_for.md)
+        first_action_state = prompt(
+        "State for that next action (active/waiting/someday): ",
+        default=("active" if project_state == "active" else project_state),
+        ).strip().lower()
+
+        if first_action_state not in {"active", "waiting", "someday"}:
+            print("Invalid state. Use active, waiting, or someday.")
+            continue
+
+        
         first_due = prompt_optional_date("Due date for that next action")
         first_notes = prompt("Notes for that next action (optional): ", default="")
 
@@ -223,7 +236,7 @@ def cmd_add(base_dir: Path) -> int:
         action_draft = {
             "title": first_action,
             "project": pid,
-            "state": action_state,
+            "state": first_action_state,
             "context": first_context,
             "created": now,
             "last_touched": now,
