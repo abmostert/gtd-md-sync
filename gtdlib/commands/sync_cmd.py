@@ -62,8 +62,6 @@ def _prune_checked_inbox_md(inbox_md: Path) -> int:
 
 def _create_next_action_for_project(master: dict, base_dir, project_id: str, actions: dict) -> str | None:
     projects = master.get("projects", {})
-    
-
     proj = projects.get(project_id)
     if not proj:
         return None
@@ -80,13 +78,17 @@ def _create_next_action_for_project(master: dict, base_dir, project_id: str, act
         print("No title entered. Skipping.")
         return None
 
+    # NEW: allow waiting here too
+    state = input("State (active/waiting) [active]: ").strip().lower() or "active"
+    if state not in {"active", "waiting"}:
+        print("Invalid state. Using active.")
+        state = "active"
+    
     context = _choose_context_from_config(base_dir)
     due = _prompt_due_date()
 
     # Reuse existing ID creation
     aid = new_id("a")
-
-    
     now = utc_now_iso() if "utc_now_iso" in dir(__import__("gtdlib.store")) else None
 
     action = {
