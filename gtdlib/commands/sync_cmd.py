@@ -88,18 +88,19 @@ def _create_next_action_for_project(master: dict, base_dir, project_id: str, act
         print("No title entered. Skipping.")
         return None
 
+           
     # IMPORTANT: state first (matches add flow)
     state = _prompt_action_state()
     if state not in {"active", "waiting", "someday"}:
         print("Invalid state. Using active.")
         state = "active"
 
-    waiting_for = None
+    context = None
     if state == "waiting":
         waiting_for = _prompt_waiting_for()
-
+    else:
     # Then context (must be a real context, not "waiting_for")
-    context = _choose_context_from_config(base_dir)
+        context = _choose_context_from_config(base_dir)
 
     due = _prompt_due_date()
 
