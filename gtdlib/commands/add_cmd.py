@@ -82,6 +82,9 @@ def cmd_add(base_dir: Path) -> int:
                     return contexts[idx - 1]
             else:
                 cand = normalize_context(raw)
+                if cand in {"waiting_for", "waiting"}:
+                    print("'waiting_for' is not a context (it's a state). Choose a real context like work/home/virtual.")
+                    continue
                 if cand in contexts:
                     return cand
             print("Invalid context. Choose a number from the list or type an exact context name.")
