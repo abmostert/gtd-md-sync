@@ -170,7 +170,10 @@ def _build_waiting_for(views_dir: Path, actions: dict, projects: dict) -> None:
             due = a.get("due")
             due_suffix = f" (due {due})" if due else ""
 
-            lines.append(f"- [ ] {title}{proj_label}{due_suffix} {_id_comment(aid)}")
+            wf = (a.get("waiting_for") or "").strip()
+            wf_txt = f" (waiting for: {wf})" if wf else ""
+            lines.append(f"- [ ] {a.get('title','')}{proj_label}{wf_txt}{due} {_id_comment(aid)}")
+
         lines.append("")
 
     (views_dir / "waiting_for.md").write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
