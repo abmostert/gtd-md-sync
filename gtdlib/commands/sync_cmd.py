@@ -13,6 +13,8 @@ from gtdlib.store import (
     normalize_context,
     new_id,
 )
+from gtdlib.prompts.action_prompts import prompt_action_draft, render_action_preview
+
 
 ID_COMMENT_RE = re.compile(r"<!--\s*id:(?P<id>[^>]+?)\s*-->")
 CHECKBOX_RE = re.compile(r"^\s*[-*+]\s*\[(?P<mark>[ xX])\]\s*(?P<text>.*)$")
@@ -83,45 +85,35 @@ def _create_next_action_for_project(master: dict, base_dir, project_id: str, act
     if ans in ("n", "no"):
         return None
 
-    a_title = input("Next action title: ").strip()
-    if not a_title:
-        print("No title entered. Skipping.")
-        return None
-
-           
-    # IMPORTANT: state first (matches add flow)
-    state = _prompt_action_state()
-    if state not in {"active", "waiting", "someday"}:
-        print("Invalid state. Using active.")
-        state = "active"
-
-    context = None
-    if state == "waiting":
-        waiting_for = _prompt_waiting_for()
-    else:
-    # Then context (must be a real context, not "waiting_for")
-        context = _choose_context_from_config(base_dir)
-
-    due = _prompt_due_date()
-
-    aid = new_id("a")
     now = utc_now_iso()
 
-    action = {
-        "title": a_title,
-        "context": context,
-        "state": state,
-        "project": project_id,
-        "created": now,
-        "last_touched": now,
-        "waiting_since": now if state == "waiting" else None,
-        "waiting_for": waiting_for,   # NEW FIELD
-        "due": due,
-        "notes": "",
-    }
+    try:
+        draft = prompt_action_draft(
+            base_dir,
+            contexts,
+            now_iso=now,
+            project_id=project_id,
+            default_state="active",
+            ask_context_when_waiting=False,
+        )
+    except ValueError as e:
+        print(str(e))
+        return None
 
-    actions[aid] = action
+    render_action_preview(draft)
+
+    confirm = input("Save this next action? [Y/n]: ").strip().lower()
+    if confirm in ("n", "no"):
+        print("Cancelled. Not saved.")
+        return None
+
+    aid = new_id("a")
+    actions[aid] = draft
+
+    print(f"Added next action {aid}: {draft['title']}")
     return aid
+    
+
 
 
 
