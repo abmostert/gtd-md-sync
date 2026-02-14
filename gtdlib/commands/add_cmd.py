@@ -85,7 +85,7 @@ def cmd_add(base_dir: Path) -> int:
             print("Invalid project state.")
             continue
 
-        project_due = input("Project due date (YYYY-MM-DD, blank for none): ").strip() or None
+        project_due = prompt_optional_date("Due date")
         project_notes = input("Project notes (optional): ").strip()
 
         # IMPORTANT: first next action for the project (shared prompt flow)
