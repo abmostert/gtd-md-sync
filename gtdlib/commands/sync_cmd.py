@@ -60,6 +60,16 @@ def _prune_checked_inbox_md(inbox_md: Path) -> int:
     return removed
 
 
+def _prompt_action_state() -> str:
+    raw = input("State (active/waiting/someday) [active]: ").strip().lower()
+    return raw or "active"
+
+
+def _prompt_waiting_for() -> str | None:
+    who = input("Waiting for (person/thing): ").strip()
+    return who or None
+
+
 def _create_next_action_for_project(master: dict, base_dir, project_id: str, actions: dict) -> str | None:
     projects = master.get("projects", {})
     proj = projects.get(project_id)
@@ -67,8 +77,8 @@ def _create_next_action_for_project(master: dict, base_dir, project_id: str, act
         return None
 
     title = (proj.get("title") or project_id).strip()
-
     print(f"\nProject stalled: {title}")
+
     ans = input("Add a next action now? [Y/n]: ").strip().lower()
     if ans in ("n", "no"):
         return None
@@ -78,33 +88,40 @@ def _create_next_action_for_project(master: dict, base_dir, project_id: str, act
         print("No title entered. Skipping.")
         return None
 
-    # NEW: allow waiting here too
-    state = input("State (active/waiting) [active]: ").strip().lower() or "active"
-    if state not in {"active", "waiting"}:
+    # IMPORTANT: state first (matches add flow)
+    state = _prompt_action_state()
+    if state not in {"active", "waiting", "someday"}:
         print("Invalid state. Using active.")
         state = "active"
-    
+
+    waiting_for = None
+    if state == "waiting":
+        waiting_for = _prompt_waiting_for()
+
+    # Then context (must be a real context, not "waiting_for")
     context = _choose_context_from_config(base_dir)
+
     due = _prompt_due_date()
 
-    # Reuse existing ID creation
     aid = new_id("a")
-    now = utc_now_iso() if "utc_now_iso" in dir(__import__("gtdlib.store")) else None
+    now = utc_now_iso()
 
     action = {
         "title": a_title,
         "context": context,
-        "state": "active",
+        "state": state,
         "project": project_id,
+        "created": now,
+        "last_touched": now,
+        "waiting_since": now if state == "waiting" else None,
+        "waiting_for": waiting_for,   # NEW FIELD
+        "due": due,
+        "notes": "",
     }
-    if now:
-        action["created"] = now
-        action["updated"] = now
-    if due:
-        action["due"] = due
 
     actions[aid] = action
     return aid
+
 
 
 def _count_active_actions_for_project(actions: dict, project_id: str) -> int:
