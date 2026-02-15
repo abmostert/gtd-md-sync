@@ -16,85 +16,12 @@ from gtdlib.prompts.action_prompts import (
     render_action_preview,
 )
 from gtdlib.rules.projects import is_project_stalled
+from gtdlib.parsing.markdown import (
+    extract_completions_from_markdown,
+    prune_checked_top_level_tasks,
+)
 
 
-ID_COMMENT_RE = re.compile(r"<!--\s*id:(?P<id>[^>]+?)\s*-->")
-CHECKBOX_RE = re.compile(r"^\s*[-*+]\s*\[(?P<mark>[ xX])\]\s*(?P<text>.*)$")
-
-
-def _prune_checked_inbox_md(inbox_md: Path) -> int:
-    """
-    Remove any top-level '- [x]' items and their indented continuation lines.
-    Returns number of removed items.
-    """
-    if not inbox_md.exists():
-        return 0
-
-    lines = inbox_md.read_text(encoding="utf-8").splitlines()
-    out: list[str] = []
-    removed = 0
-    i = 0
-
-    def is_top_item(line: str) -> bool:
-        s = line.lstrip("\ufeff")
-        return s.startswith("- [")  # top-level list item
-
-    while i < len(lines):
-        line = lines[i]
-        s = line.lstrip("\ufeff")
-
-        if s.startswith("- [x]") or s.startswith("- [X]"):
-            removed += 1
-            i += 1
-
-            # Skip continuation lines until next top-level item or EOF
-            while i < len(lines) and (not is_top_item(lines[i]) and lines[i].strip() != "- [ ]"):
-                i += 1
-
-            # Also skip blank lines immediately following the item block
-            while i < len(lines) and lines[i].strip() == "":
-                i += 1
-
-            continue
-
-        out.append(line)
-        i += 1
-
-    inbox_md.write_text("\n".join(out).rstrip() + "\n", encoding="utf-8")
-    return removed
-
-
-def _extract_completions_from_markdown(text: str) -> dict[str, bool]:
-    """
-    Returns a mapping: { item_id: True/False }
-    Only items that include an <!-- id:... --> marker are considered.
-    Completion is True if:
-      - checkbox is [x] or [X], OR
-      - line contains 'XXX' (user marker) anywhere after the text
-    """
-    results: dict[str, bool] = {}
-
-    for line in text.splitlines():
-        m_id = ID_COMMENT_RE.search(line)
-        if not m_id:
-            continue
-
-        # Proton sometimes escapes underscores inside HTML comments when rendered/round-tripped
-        item_id = m_id.group("id").strip().replace("\\_", "_")
-
-        done = False
-
-        norm_line = line.lstrip("\ufeff")  # remove BOM if present
-        m_cb = CHECKBOX_RE.match(norm_line)
-        if m_cb:
-            done = (m_cb.group("mark").lower() == "x")
-
-        if "XXX" in line:
-            done = True
-
-        results[item_id] = done
-
-    return results
 
 
 def _create_next_action_for_project(
@@ -173,7 +100,9 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
     completion_map: dict[str, bool] = {}
     for fp in view_files:
         if fp.exists():
-            completion_map.update(_extract_completions_from_markdown(fp.read_text(encoding="utf-8")))
+            completion_map.update(
+            extract_completions_from_markdown(fp.read_text(encoding="utf-8"))
+        )
 
     now = utc_now_iso()
     completed_actions = 0
@@ -215,10 +144,13 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
                     contexts=contexts,
                 )
 
-    # Prune checked capture items from inbox/inbox.md (no IDs; purely structural)
-    pruned = _prune_checked_inbox_md(base_dir / "inbox" / "inbox.md")
-    if pruned:
-        print(f"Pruned {pruned} checked capture item(s) from inbox/inbox.md")
+    inbox_md = base_dir / "inbox" / "inbox.md"
+    if inbox_md.exists():
+        new_text, removed = prune_checked_top_level_tasks(inbox_md.read_text(encoding="utf-8"))
+        if removed:
+            inbox_md.write_text(new_text, encoding="utf-8")
+            print(f"Pruned {removed} checked capture item(s) from inbox/inbox.md")
+
 
     master["actions"] = actions
     master["projects"] = projects
