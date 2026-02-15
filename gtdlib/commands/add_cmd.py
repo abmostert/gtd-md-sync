@@ -9,6 +9,9 @@ from gtdlib.prompts.action_prompts import prompt_action_draft, render_action_pre
 from gtdlib.prompts.confirm import confirm_save_redo_cancel
 from gtdlib.prompts.selectors import choose_project_id
 
+from gtdlib.prompts.project_prompts import prompt_project_draft, render_project_preview    
+
+
 
 def cmd_add(base_dir: Path) -> int:
     """
@@ -74,61 +77,43 @@ def cmd_add(base_dir: Path) -> int:
     # PROJECT BRANCH
     # -------------------------
     # If we reach here, kind == "p"
+        # -------------------------
+    # PROJECT BRANCH
+    # -------------------------
+    # If we reach here, kind == "p"
     while True:
-        project_title = input("Project title (outcome): ").strip()
-        if not project_title:
-            print("Project title is required.")
-            continue
-
-        project_state = input("Project state (active/someday/completed/dropped): [active] ").strip().lower() or "active"
-        if project_state not in {"active", "someday", "completed", "dropped"}:
-            print("Invalid project state.")
-            continue
-
-        project_due = prompt_optional_date("Project due date")
-        project_notes = prompt("Project notes (optional): ", default="")
-
-        # IMPORTANT: first next action for the project (shared prompt flow)
         try:
-            first_action_draft = prompt_action_draft(
-                base_dir=base_dir,
-                contexts=contexts,
-                now_iso=now,
-                project_id=None,  # set after pid exists
-                default_state=("active" if project_state == "active" else "someday"),
-                ask_context_when_waiting=False,
-            )
+            project_draft = prompt_project_draft(base_dir, now_iso=now, default_state="active")
         except ValueError as e:
             print(str(e))
             continue
 
-        # Create IDs
+        # Create IDs early so the previews show the real IDs
         pid = new_id("p")
         aid = new_id("a")
 
-        # Attach project id onto action draft
-        first_action_draft["project"] = pid
+        # First next action: reuse your unified action prompt
+        try:
+            first_action_draft = prompt_action_draft(
+                base_dir,
+                contexts,
+                now_iso=now,
+                project_id=pid,
+                default_state="active",
+                ask_context_when_waiting=False,
+            )
+        except ValueError as e:
+            print(str(e))
+            # let them redo the whole project flow
+            continue
 
-        project_draft = {
-            "title": project_title,
-            "state": project_state,
-            "created": now,
-            "reviewed": None,
-            "due": project_due,
-            "notes": project_notes,
-        }
-
-        print("\n--- Project preview ---")
-        print(f"Project ID:    {pid}")
-        print(f"Title:         {project_draft['title']}")
-        print(f"State:         {project_draft['state']}")
-        print(f"Due:           {project_draft.get('due')}")
-        print(f"Notes:         {project_draft.get('notes')}")
-        print("\n--- First action preview ---")
-        print(f"Action ID:     {aid}")
+        # Preview
+        render_project_preview(pid, project_draft)
+        print("--- First action preview ---")
+        print(f"Action ID:  {aid}")
         render_action_preview(first_action_draft)
 
-        decision = confirm_save_redo_cancel()
+        decision = confirm_or_redo()
         if decision == "c":
             print("Cancelled. Nothing saved.")
             return 0
@@ -140,7 +125,9 @@ def cmd_add(base_dir: Path) -> int:
         master.setdefault("actions", {})[aid] = first_action_draft
         save_master(base_dir, master)
 
-        print(f"Added project {pid}: {project_title}")
+        print(f"Added project {pid}: {project_draft['title']}")
         print(f"Added first action {aid}: {first_action_draft['title']}")
         return 0
+
+
 
