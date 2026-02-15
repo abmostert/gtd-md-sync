@@ -15,6 +15,7 @@ from gtdlib.prompts.action_prompts import (
     prompt_action_draft,
     render_action_preview,
 )
+from gtdlib.rules.projects import count_open_actions
 
 
 ID_COMMENT_RE = re.compile(r"<!--\s*id:(?P<id>[^>]+?)\s*-->")
@@ -61,20 +62,6 @@ def _prune_checked_inbox_md(inbox_md: Path) -> int:
 
     inbox_md.write_text("\n".join(out).rstrip() + "\n", encoding="utf-8")
     return removed
-
-
-def _count_open_actions_for_project(actions: dict, project_id: str) -> int:
-    """
-    "Open" actions that prevent a project from being considered stalled.
-    We treat both active and waiting as open.
-    """
-    n = 0
-    for a in actions.values():
-        if a.get("project") != project_id:
-            continue
-        if a.get("state") in {"active", "waiting"}:
-            n += 1
-    return n
 
 
 def _extract_completions_from_markdown(text: str) -> dict[str, bool]:
@@ -222,7 +209,7 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
             if p.get("state") != "active":
                 continue
 
-            if _count_open_actions_for_project(actions, pid) == 0:
+            if count_open_actions(actions, pid) == 0:
                 _create_next_action_for_project(
                     master=master,
                     base_dir=base_dir,
