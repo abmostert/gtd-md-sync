@@ -55,5 +55,7 @@ def fetch_capture_emails(base_dir: Path, attachments_dir: Path, limit: int = 50)
         out_attachments_dir=attachments_dir,
         limit=limit,
         search_query="ALL",
+        starttls=cfg.starttls,
+        tls_verify=cfg.tls_verify,
     )
 
