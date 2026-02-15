@@ -3,12 +3,14 @@ from __future__ import annotations
 import imaplib
 import os
 import re
+import ssl
 from dataclasses import dataclass
 from datetime import datetime
 from email import message_from_bytes
 from email.message import Message
 from pathlib import Path
 from typing import Iterable
+
 
 
 @dataclass
@@ -146,14 +148,44 @@ def fetch_from_imap(
     out_attachments_dir: Path,
     limit: int = 50,
     search_query: str = "ALL",
+    starttls: bool = True,
+    tls_verify: bool = False,
 ) -> list[CapturedEmail]:
     """
     Fetch messages from IMAP folder using UID fetch.
-    This does NOT delete or move messages. It just reads them.
+
+    Notes:
+    - Proton Bridge commonly exposes IMAP on 1143 with STARTTLS.
+    - If tls_verify=False (default), we skip certificate verification (ok for localhost Bridge).
+    - This does NOT delete or move messages. It just reads them.
     """
-    m = imaplib.IMAP4_SSL(host, port)
+    m = None
+
+    # TLS context (used for STARTTLS, and optionally for IMAPS)
+    tls_ctx = ssl.create_default_context()
+    if not tls_verify:
+        tls_ctx.check_hostname = False
+        tls_ctx.verify_mode = ssl.CERT_NONE
+
     try:
+        if starttls:
+            # Plain IMAP socket, then upgrade to TLS via STARTTLS
+            m = imaplib.IMAP4(host, port)
+            try:
+                m.starttls(ssl_context=tls_ctx)
+            except Exception as e:
+                # If STARTTLS fails, don't continue with a broken socket
+                raise RuntimeError(f"IMAP STARTTLS failed on {host}:{port}: {e}") from e
+        else:
+            # Direct IMAPS (only use this if your server actually speaks SSL immediately, e.g. port 993)
+            try:
+                m = imaplib.IMAP4_SSL(host, port, ssl_context=tls_ctx)
+            except TypeError:
+                # Older Python fallback (no ssl_context arg)
+                m = imaplib.IMAP4_SSL(host, port)
+
         m.login(username, password)
+
         typ, _ = m.select(folder, readonly=True)
         if typ != "OK":
             raise RuntimeError(f"Failed to select folder: {folder}")
@@ -186,8 +218,11 @@ def fetch_from_imap(
             results.append(CapturedEmail(uid=uid, subject=subject, body_text=body, attachments=atts))
 
         return results
+
     finally:
-        try:
-            m.logout()
-        except Exception:
-            pass
+        if m is not None:
+            try:
+                m.logout()
+            except Exception:
+                pass
+
