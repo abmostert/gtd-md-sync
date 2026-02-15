@@ -20,6 +20,23 @@ class CapturedEmail:
     body_text: str
     attachments: list[Path]
 
+def _connect_imap(host: str, port: int, *, starttls: bool, tls_verify: bool):
+    """
+    Connect to IMAP.
+    Proton Bridge commonly uses plaintext on 1143 + STARTTLS.
+    """
+    m = imaplib.IMAP4(host, port)
+
+    if starttls:
+        if tls_verify:
+            ctx = ssl.create_default_context()
+        else:
+            ctx = ssl._create_unverified_context()
+        m.starttls(ssl_context=ctx)
+
+    return m
+
+
 
 def _safe_filename(s: str) -> str:
     s = (s or "").strip()
