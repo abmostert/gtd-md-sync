@@ -205,7 +205,7 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
     if prompt_next:
         contexts = get_contexts(base_dir)
 
-        for pid, p in projects.keys():
+        for pid in projects.keys():
             if is_project_stalled(projects, actions, pid):
                 _create_next_action_for_project(
                     master=master,
