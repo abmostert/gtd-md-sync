@@ -56,10 +56,10 @@ def main() -> int:
     p_proj_list = proj.add_parser("list", help="List projects")
     p_proj_edit = proj.add_parser("edit", help="Edit a project")
 
-    p_capture = sub.add_parser("capture", help="Capture emails via IMAP into inbox/inbox.md")
+    p_capture = sub.add_parser("capture", help="Fetch capture emails into inbox/inbox.md")
     p_capture.add_argument("--dir", default=".", help="GTD workspace directory (default: current directory)")
-    p_capture.add_argument("--dry-run", action="store_true", help="Do not write or delete; just count")
-    p_capture.add_argument("--all", action="store_true", help="Capture ALL messages (not just UNSEEN)")
+    p_capture.add_argument("--limit", type=int, default=50, help="Max emails to fetch (default: 50)")
+
 
 
 
@@ -100,9 +100,7 @@ def main() -> int:
 
     if args.cmd == "capture":
         base_dir = Path(args.dir).expanduser().resolve()
-        return cmd_capture(base_dir, dry_run=args.dry_run, all_mail=args.all)
-
-
+        return cmd_capture(base_dir, limit=args.limit)
 
 
     return 0
