@@ -12,7 +12,7 @@ from gtdlib.store import (
     normalize_context,
 )
 from gtdlib.prompts.action_prompts import prompt_action_draft, render_action_preview
-from gtdlib.rules.project import count_actions_by_state
+from gtdlib.rules.projects import count_actions_by_state
 
 
 def _choose_project_id(projects: dict, *, allow_states: set[str] | None = None) -> str | None:
