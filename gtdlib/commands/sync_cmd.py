@@ -19,60 +19,9 @@ from gtdlib.parsing.markdown import (
     extract_completions_from_markdown,
     prune_checked_top_level_tasks,
 )
+from gtdlib.prompts.stalled_project_prompts import prompt_next_action_for_stalled_project
 
 
-
-
-def _create_next_action_for_project(
-    *,
-    master: dict,
-    base_dir: Path,
-    project_id: str,
-    actions: dict,
-    contexts: list[str],
-) -> str | None:
-    """
-    Prompt the user to add a next action for a stalled project.
-    This is intentionally minimal: yes/no + shared action draft prompt.
-    """
-    projects = master.get("projects", {})
-    proj = projects.get(project_id)
-    if not proj:
-        return None
-
-    title = (proj.get("title") or project_id).strip()
-    print(f"\nProject stalled: {title}")
-
-    ans = input("Add a next action now? [Y/n]: ").strip().lower()
-    if ans in ("n", "no"):
-        return None
-
-    now = utc_now_iso()
-
-    try:
-        draft = prompt_action_draft(
-            base_dir=base_dir,
-            contexts=contexts,
-            now_iso=now,
-            project_id=project_id,
-            default_state="active",
-            ask_context_when_waiting=False,
-        )
-    except ValueError as e:
-        print(str(e))
-        return None
-
-    render_action_preview(draft)
-
-    confirm = input("Save this next action? [Y/n]: ").strip().lower()
-    if confirm in ("n", "no"):
-        print("Cancelled. Not saved.")
-        return None
-
-    aid = new_id("a")
-    actions[aid] = draft
-    print(f"Added next action {aid}: {draft.get('title','')}")
-    return aid
 
 
 def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
@@ -134,13 +83,17 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
 
         for pid in projects.keys():
             if is_project_stalled(projects, actions, pid):
-                _create_next_action_for_project(
-                    master=master,
+                proj = projects.get(pid, {})
+                title = (proj.get("title") or pid).strip()
+
+                prompt_next_action_for_stalled_project(
                     base_dir=base_dir,
                     project_id=pid,
-                    actions=actions,
+                    project_title=title,
                     contexts=contexts,
+                    actions=actions,
                 )
+
 
     inbox_md = base_dir / "inbox" / "inbox.md"
     if inbox_md.exists():
