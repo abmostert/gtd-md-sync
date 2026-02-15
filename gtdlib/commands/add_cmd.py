@@ -113,7 +113,7 @@ def cmd_add(base_dir: Path) -> int:
         print(f"Action ID:  {aid}")
         render_action_preview(first_action_draft)
 
-        decision = confirm_or_redo()
+        decision = confirm_or_redo_cancel()
         if decision == "c":
             print("Cancelled. Nothing saved.")
             return 0
