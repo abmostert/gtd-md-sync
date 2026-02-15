@@ -15,7 +15,7 @@ from gtdlib.prompts.action_prompts import (
     prompt_action_draft,
     render_action_preview,
 )
-from gtdlib.rules.projects import count_open_actions
+from gtdlib.rules.projects import is_project_stalled
 
 
 ID_COMMENT_RE = re.compile(r"<!--\s*id:(?P<id>[^>]+?)\s*-->")
@@ -205,11 +205,8 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
     if prompt_next:
         contexts = get_contexts(base_dir)
 
-        for pid, p in projects.items():
-            if p.get("state") != "active":
-                continue
-
-            if count_open_actions(actions, pid) == 0:
+        for pid, p in projects.keys():
+            if is_project_stalled(projects, actions, pid):
                 _create_next_action_for_project(
                     master=master,
                     base_dir=base_dir,
