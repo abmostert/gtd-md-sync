@@ -14,6 +14,9 @@ class ProtonBridgeConfig:
     username: str
     password: str
     folder: str
+    starttls: bool
+    tls_verify: bool
+
 
 
 def load_proton_bridge_config(base_dir: Path) -> ProtonBridgeConfig:
@@ -27,6 +30,9 @@ def load_proton_bridge_config(base_dir: Path) -> ProtonBridgeConfig:
     username = str(imap.get("username", "")).strip()
     password = str(imap.get("password", "")).strip()
     folder = str(imap.get("folder", "")).strip()
+    starttls = bool(imap.get("starttls", True))
+    tls_verify = bool(imap.get("tls_verify", False))
+
 
     if not username or not password or not folder:
         raise ValueError(
