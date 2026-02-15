@@ -13,40 +13,8 @@ from gtdlib.store import (
 )
 from gtdlib.prompts.action_prompts import prompt_action_draft, render_action_preview
 from gtdlib.rules.projects import count_actions_by_state
+from gtdlib.prompts.selectors import choose_project_id
 
-
-def _choose_project_id(projects: dict, *, allow_states: set[str] | None = None) -> str | None:
-    """
-    Return a project_id (e.g. 'p_abcd1234') or None if none exist / cancelled.
-    allow_states: if provided, only show projects whose state is in allow_states.
-    """
-    rows: list[tuple[str, str, str]] = []
-    for pid, p in projects.items():
-        state = (p.get("state") or "").strip().lower()
-        if allow_states and state not in allow_states:
-            continue
-        title = (p.get("title") or "").strip() or pid
-        rows.append((pid, title, state))
-
-    if not rows:
-        print("No matching projects.")
-        return None
-
-    rows.sort(key=lambda t: t[1].lower())
-
-    print("\nChoose a project:")
-    for i, (_, title, state) in enumerate(rows, start=1):
-        print(f"  {i}. {title} ({state})")
-
-    while True:
-        raw = input("Project (number, blank to cancel): ").strip()
-        if raw == "":
-            return None
-        if raw.isdigit():
-            idx = int(raw)
-            if 1 <= idx <= len(rows):
-                return rows[idx - 1][0]
-        print("Invalid choice.")
 
 
 def cmd_project_list(base_dir: Path, *, state: str | None = None) -> int:
@@ -88,7 +56,7 @@ def cmd_project_edit(base_dir: Path) -> int:
     projects: dict = master.get("projects", {})
     actions: dict = master.get("actions", {})
 
-    pid = _choose_project_id(projects)
+    pid = choose_project_id(projects)
     if not pid:
         print("Cancelled.")
         return 0
