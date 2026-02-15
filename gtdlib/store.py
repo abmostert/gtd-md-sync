@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
+from gtdlib.rules.contexts import normalize_context
+
 
 MASTER_FILENAME = "master.json"
 CONFIG_FILENAME = "config.json"
@@ -125,7 +127,4 @@ def ensure_config(base_dir: Path) -> dict:
         return cfg
     return load_config(base_dir)
 
-
-def normalize_context(s: str) -> str:
-    return s.strip().lower().replace(" ", "_")
 
