@@ -36,9 +36,9 @@ def load_proton_bridge_config(base_dir: Path) -> ProtonBridgeConfig:
     tls_verify = bool(imap.get("tls_verify", False))
 
     if not password:
-    password = getpass.getpass(
-        prompt=f"Proton Bridge IMAP password for {username}: "
-    ) 
+        password = getpass.getpass(
+            prompt=f"Proton Bridge IMAP password for {username}: "
+        ) 
 
 
     if not username or not folder:
