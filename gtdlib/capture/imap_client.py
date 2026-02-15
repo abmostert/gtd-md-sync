@@ -23,18 +23,30 @@ class CapturedEmail:
 def _connect_imap(host: str, port: int, *, starttls: bool, tls_verify: bool):
     """
     Connect to IMAP.
-    Proton Bridge commonly uses plaintext on 1143 + STARTTLS.
-    """
-    m = imaplib.IMAP4(host, port)
 
+    - If starttls=True: connect plaintext then upgrade via STARTTLS (common for Bridge on 1143).
+    - If starttls=False: connect using IMAP4_SSL (for servers speaking SSL immediately).
+    """
     if starttls:
+        m = imaplib.IMAP4(host, port)
         if tls_verify:
             ctx = ssl.create_default_context()
         else:
             ctx = ssl._create_unverified_context()
         m.starttls(ssl_context=ctx)
+        return m
 
-    return m
+    # direct SSL
+    if tls_verify:
+        ctx = ssl.create_default_context()
+    else:
+        ctx = ssl._create_unverified_context()
+    try:
+        return imaplib.IMAP4_SSL(host, port, ssl_context=ctx)
+    except TypeError:
+        # older python fallback
+        return imaplib.IMAP4_SSL(host, port)
+
 
 
 
@@ -178,29 +190,8 @@ def fetch_from_imap(
     """
     m = None
 
-    # TLS context (used for STARTTLS, and optionally for IMAPS)
-    tls_ctx = ssl.create_default_context()
-    if not tls_verify:
-        tls_ctx.check_hostname = False
-        tls_ctx.verify_mode = ssl.CERT_NONE
-
     try:
-        if starttls:
-            # Plain IMAP socket, then upgrade to TLS via STARTTLS
-            m = imaplib.IMAP4(host, port)
-            try:
-                m.starttls(ssl_context=tls_ctx)
-            except Exception as e:
-                # If STARTTLS fails, don't continue with a broken socket
-                raise RuntimeError(f"IMAP STARTTLS failed on {host}:{port}: {e}") from e
-        else:
-            # Direct IMAPS (only use this if your server actually speaks SSL immediately, e.g. port 993)
-            try:
-                m = imaplib.IMAP4_SSL(host, port, ssl_context=tls_ctx)
-            except TypeError:
-                # Older Python fallback (no ssl_context arg)
-                m = imaplib.IMAP4_SSL(host, port)
-
+        m = _connect_imap(host, port, starttls=starttls, tls_verify=tls_verify)
         m.login(username, password)
 
         typ, _ = m.select(folder, readonly=True)
