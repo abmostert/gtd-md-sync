@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 from collections import defaultdict
-from gtdlib.store import load_master, VIEWS_DIRNAME
-import re
 
-_ID_COMMENT_RE = re.compile(r"<!--\s*id:(?P<id>[a-z]_[0-9a-f]{8})\s*-->")
+from gtdlib.store import load_master, VIEWS_DIRNAME
+from gtdlib.rules.projects import (
+    count_actions_by_state,
+    is_project_stalled,
+)
+
 
 def cmd_build(base_dir: Path) -> int:
     """
@@ -31,11 +34,8 @@ def cmd_build(base_dir: Path) -> int:
     _build_agenda(views_dir, actions, projects)
     _build_stalled_projects(views_dir, actions, projects)
 
-
-
     print("Views rebuilt.")
     return 0
-
 
 
 def _id_comment(item_id: str) -> str:
@@ -66,16 +66,14 @@ def _build_next_actions(views_dir: Path, actions: dict, projects: dict) -> None:
         )
         for aid, a in items:
             due = f" (due {a['due']})" if a.get("due") else ""
-            # checkbox stays unchecked; user ticks it. We embed ID as HTML comment.
             proj_label = ""
             pid = a.get("project")
             if pid and pid in projects:
-                proj_title = projects[pid].get("title", "").strip()
+                proj_title = (projects[pid].get("title") or "").strip()
                 if proj_title:
                     proj_label = f" [{proj_title}]"
 
             lines.append(f"- [ ] {a.get('title','')}{proj_label}{due} {_id_comment(aid)}")
-
 
         lines.append("")
 
@@ -86,21 +84,26 @@ def _build_next_actions(views_dir: Path, actions: dict, projects: dict) -> None:
 
 
 def _build_projects(views_dir: Path, projects: dict, actions: dict) -> None:
+    """
+    Projects view shows ACTIVE projects with:
+      - Active actions count
+      - Waiting items count
+    (So you don't miss waiting-for work.)
+    """
     lines: list[str] = ["# Projects\n"]
 
-    # show ACTIVE projects
-    for pid, project in sorted(projects.items(), key=lambda t: t[1].get("title", "")):
+    for pid, project in sorted(projects.items(), key=lambda t: (t[1].get("title", "") or "").lower()):
         if project.get("state") != "active":
             continue
 
-        active_actions = [
-            a for a in actions.values()
-            if a.get("project") == pid and a.get("state") == "active"
-        ]
+        counts = count_actions_by_state(actions, pid)
+        n_active = counts.get("active", 0)
+        n_waiting = counts.get("waiting", 0)
 
         due = f" (due {project['due']})" if project.get("due") else ""
         lines.append(f"## {project.get('title','')}{due} {_id_comment(pid)}")
-        lines.append(f"- Active actions: {len(active_actions)}")
+        lines.append(f"- Active actions: {n_active}")
+        lines.append(f"- Waiting items: {n_waiting}")
         lines.append("")
 
     (views_dir / "projects.md").write_text(
@@ -117,13 +120,13 @@ def _build_someday(views_dir: Path, projects: dict, actions: dict) -> None:
 
     if someday_projects:
         lines.append("## Projects\n")
-        for pid, p in sorted(someday_projects, key=lambda t: t[1].get("title", "")):
+        for pid, p in sorted(someday_projects, key=lambda t: (t[1].get("title", "") or "").lower()):
             lines.append(f"- {p.get('title','')} {_id_comment(pid)}")
         lines.append("")
 
     if someday_actions:
         lines.append("## Actions\n")
-        for aid, a in sorted(someday_actions, key=lambda t: t[1].get("title", "")):
+        for aid, a in sorted(someday_actions, key=lambda t: (t[1].get("title", "") or "").lower()):
             lines.append(f"- {a.get('title','')} {_id_comment(aid)}")
         lines.append("")
 
@@ -132,14 +135,11 @@ def _build_someday(views_dir: Path, projects: dict, actions: dict) -> None:
         encoding="utf-8",
     )
 
+
 def _build_waiting_for(views_dir: Path, actions: dict, projects: dict) -> None:
     lines: list[str] = ["# Waiting For", ""]
 
-    # Collect waiting actions
-    items: list[tuple[str, dict]] = []
-    for aid, a in actions.items():
-        if a.get("state") == "waiting":
-            items.append((aid, a))
+    items: list[tuple[str, dict]] = [(aid, a) for aid, a in actions.items() if a.get("state") == "waiting"]
 
     if not items:
         lines.append("_No waiting items._")
@@ -155,10 +155,12 @@ def _build_waiting_for(views_dir: Path, actions: dict, projects: dict) -> None:
     for who in sorted(groups.keys(), key=str.lower):
         lines.append(f"## {who}")
         lines.append("")
-        for aid, a in sorted(groups[who], key=lambda t: (t[1].get("due") or "", t[1].get("title") or "")):
+        for aid, a in sorted(
+            groups[who],
+            key=lambda t: ((t[1].get("due") or "9999-12-31"), (t[1].get("title") or "")),
+        ):
             title = (a.get("title") or "").strip()
 
-            # Optional project label
             proj_label = ""
             pid = a.get("project")
             if pid and pid in projects:
@@ -166,12 +168,8 @@ def _build_waiting_for(views_dir: Path, actions: dict, projects: dict) -> None:
                 if ptitle:
                     proj_label = f" [{ptitle}]"
 
-            # Optional due suffix (match your existing style if you have a formatter)
             due = f" (due {a['due']})" if a.get("due") else ""
-            due_suffix = f" (due {due})" if due else ""
-
-            lines.append(f"- [ ] {a.get('title','')}{proj_label}{due} {_id_comment(aid)}")
-
+            lines.append(f"- [ ] {title}{proj_label}{due} {_id_comment(aid)}")
 
         lines.append("")
 
@@ -194,7 +192,6 @@ def _build_agenda(views_dir: Path, actions: dict, projects: dict) -> None:
         (views_dir / "agenda.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
         return
 
-    # Group by agenda target (context name after agenda_)
     groups: dict[str, list[tuple[str, dict]]] = {}
     for aid, a in agenda_items:
         ctx = (a.get("context") or "").strip()
@@ -204,7 +201,10 @@ def _build_agenda(views_dir: Path, actions: dict, projects: dict) -> None:
     for who in sorted(groups.keys(), key=str.lower):
         lines.append(f"## {who}")
         lines.append("")
-        items = sorted(groups[who], key=lambda t: ((t[1].get("due") or "9999-12-31"), t[1].get("title") or ""))
+        items = sorted(
+            groups[who],
+            key=lambda t: ((t[1].get("due") or "9999-12-31"), (t[1].get("title") or "")),
+        )
         for aid, a in items:
             due = f" (due {a['due']})" if a.get("due") else ""
             proj_label = ""
@@ -224,15 +224,7 @@ def _build_stalled_projects(views_dir: Path, actions: dict, projects: dict) -> N
 
     stalled: list[tuple[str, dict]] = []
     for pid, p in projects.items():
-        if p.get("state") != "active":
-            continue
-
-        active_count = 0
-        for a in actions.values():
-            if a.get("project") == pid and a.get("state") == "active":
-                active_count += 1
-
-        if active_count == 0:
+        if is_project_stalled(projects, actions, pid):
             stalled.append((pid, p))
 
     if not stalled:
@@ -249,6 +241,5 @@ def _build_stalled_projects(views_dir: Path, actions: dict, projects: dict) -> N
         lines.append(f"- {title}{due_suffix} {_id_comment(pid)}")
 
     (views_dir / "stalled_projects.md").write_text("\n".join(lines).strip() + "\n", encoding="utf-8")
-
 
 
