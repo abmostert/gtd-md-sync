@@ -20,6 +20,22 @@ class CapturedEmail:
     body_text: str
     attachments: list[Path]
 
+def _quote_mailbox(name: str) -> str:
+    """
+    IMAP mailbox names with spaces (and some specials) must be quoted.
+    """
+    s = (name or "").strip()
+
+    # Escape backslashes and quotes inside quoted-string
+    s_esc = s.replace("\\", "\\\\").replace('"', r"\"")
+
+    # Quote if it contains spaces or common IMAP delimiter-ish chars
+    if any(ch in s for ch in (" ", "(", ")", "{", "}", "%", "*")):
+        return f'"{s_esc}"'
+
+    return s
+
+
 def _connect_imap(host: str, port: int, *, starttls: bool, tls_verify: bool):
     """
     Connect to IMAP.
@@ -194,7 +210,8 @@ def fetch_from_imap(
         m = _connect_imap(host, port, starttls=starttls, tls_verify=tls_verify)
         m.login(username, password)
 
-        typ, _ = m.select(folder, readonly=True)
+        mailbox = _quote_mailbox(folder)
+        typ, _ = m.select(mailbox, readonly=True)
         if typ != "OK":
             raise RuntimeError(f"Failed to select folder: {folder}")
 
