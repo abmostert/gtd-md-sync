@@ -14,8 +14,8 @@ class ProtonBridgeConfig:
     username: str
     password: str
     folder: str
-    starttls: bool
-    tls_verify: bool
+    starttls: bool = True
+    tls_verify: bool = False
 
 
 
@@ -41,7 +41,8 @@ def load_proton_bridge_config(base_dir: Path) -> ProtonBridgeConfig:
             '"username": "...", "password": "...", "folder": "..." } }'
         )
 
-    return ProtonBridgeConfig(host=host, port=port, username=username, password=password, folder=folder)
+    return ProtonBridgeConfig(host=host, port=port, username=username, password=password, folder=folder, starttls=starttls,
+        tls_verify=tls_verify)
 
 
 def fetch_capture_emails(base_dir: Path, attachments_dir: Path, limit: int = 50) -> list[CapturedEmail]:
