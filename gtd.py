@@ -54,7 +54,10 @@ def main() -> int:
     proj = p_project.add_subparsers(dest="proj_cmd", required=True)
 
     p_proj_list = proj.add_parser("list", help="List projects")
+    p_proj_list.add_argument("--state", default="", help="Filter by state (active/someday/completed/dropped)")
+
     p_proj_edit = proj.add_parser("edit", help="Edit a project")
+
 
     p_capture = sub.add_parser("capture", help="Fetch capture emails into inbox/inbox.md")
     p_capture.add_argument("--dir", default=".", help="GTD workspace directory (default: current directory)")
@@ -94,9 +97,11 @@ def main() -> int:
     if args.cmd == "project":
         base_dir = Path(args.dir).expanduser().resolve()
         if args.proj_cmd == "list":
-            return cmd_project_list(base_dir)
+            state = args.state.strip() or None
+            return cmd_project_list(base_dir, state=state)
         if args.proj_cmd == "edit":
             return cmd_project_edit(base_dir)
+
 
     if args.cmd == "capture":
         base_dir = Path(args.dir).expanduser().resolve()
