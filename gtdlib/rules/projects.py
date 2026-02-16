@@ -2,9 +2,8 @@
 from __future__ import annotations
 
 from typing import Dict, Iterable, Tuple
+from gtdlib.rules.schema import ACTION_OPEN_STATES
 
-
-OPEN_STATES = {"active", "waiting"}
 
 
 def iter_actions_for_project(actions: dict, project_id: str) -> Iterable[dict]:
@@ -49,7 +48,7 @@ def count_open_actions(actions: dict, project_id: str) -> int:
     for a in actions.values():
         if a.get("project") != project_id:
             continue
-        if (a.get("state") or "").strip().lower() in OPEN_STATES:
+        if (a.get("state") or "").strip().lower() in ACTION_OPEN_STATES:
             n += 1
     return n
 
