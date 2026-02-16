@@ -6,9 +6,9 @@ from typing import Optional
 
 from gtdlib.store import normalize_context
 from gtdlib.prompts.common import prompt, prompt_optional_date
-from gtdlib.rules.schema import validate_action_state
+from gtdlib.rules.schema import RESERVED_CONTEXTS, validate_action_state
 
-_RESERVED_CONTEXTS = {"waiting_for", "waiting"}
+
 
 
 def _clean_contexts(contexts: list[str]) -> list[str]:
@@ -18,7 +18,7 @@ def _clean_contexts(contexts: list[str]) -> list[str]:
         c2 = normalize_context(c)
         if not c2:
             continue
-        if c2 in _RESERVED_CONTEXTS:
+        if c2 in RESERVED_CONTEXTS:
             continue
         cleaned.append(c2)
     return sorted(set(cleaned))
@@ -46,7 +46,7 @@ def choose_context(contexts: list[str]) -> str:
                 return contexts[idx - 1]
         else:
             cand = normalize_context(raw)
-            if cand in _RESERVED_CONTEXTS:
+            if cand in RESERVED_CONTEXTS:
                 print("'waiting_for' is not a context (it's a state). Choose a real context like work/home/virtual.")
                 continue
             if cand in contexts:
