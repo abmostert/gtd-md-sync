@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+from typing import Optional
 
 
 def prompt(text: str, default: str | None = None) -> str:
