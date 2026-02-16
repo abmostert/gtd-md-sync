@@ -6,7 +6,7 @@ from typing import Optional
 
 from gtdlib.store import normalize_context
 from gtdlib.prompts.common import prompt, prompt_optional_date
-
+from gtdlib.rules.schema import validate_action_state
 
 _RESERVED_CONTEXTS = {"waiting_for", "waiting"}
 
@@ -56,14 +56,13 @@ def choose_context(contexts: list[str]) -> str:
 
 
 def prompt_action_state(*, default: str = "active") -> str:
-    """
-    Prompt for action state. Loops until valid.
-    """
     while True:
-        state = prompt("State (active/waiting/someday): ", default=default).strip().lower()
-        if state in {"active", "waiting", "someday"}:
-            return state
-        print("Invalid state. Use active, waiting, or someday.")
+        raw = prompt("State (active/waiting/someday): ", default=default).strip()
+        try:
+            return validate_action_state(raw)
+        except ValueError as e:
+            print(str(e))
+
 
 
 def prompt_waiting_for() -> str:
