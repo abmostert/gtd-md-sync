@@ -5,6 +5,8 @@ PROJECT_STATES = {"active", "someday", "completed", "dropped"}
 ACTION_STATES = {"active", "waiting", "someday"}  
 # “Open” for stalled-project logic
 ACTION_OPEN_STATES = {"active", "waiting"}
+RESERVED_CONTEXTS = {"waiting_for", "waiting"}
+
 
 def validate_project_state(state: str) -> str:
     s = (state or "").strip().lower()
