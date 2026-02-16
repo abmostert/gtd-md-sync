@@ -16,3 +16,8 @@ def prompt_optional_date(text: str) -> str | None:
     """Accept YYYY-MM-DD or empty for None. (No strict validation in v1.)"""
     s = input(f"{text} (YYYY-MM-DD, or blank): ").strip()
     return s or None
+
+def prompt_optional_date_keep(text: str, existing: str | None) -> str | None:
+    s = input(f"{text} (YYYY-MM-DD, blank keeps current): ").strip()
+    return existing if s == "" else s
+
