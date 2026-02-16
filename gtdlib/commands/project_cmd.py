@@ -6,8 +6,10 @@ from gtdlib.store import load_master, save_master, utc_now_iso, new_id
 from gtdlib.prompts.selectors import choose_project_id
 from gtdlib.prompts.project_prompts import prompt_project_edit
 from gtdlib.prompts.action_prompts import prompt_action_draft, render_action_preview
+from gtdlib.prompts.project_edit_prompts import choose_project_edit_operation
 from gtdlib.config import get_contexts
 from gtdlib.rules.projects import count_actions_by_state
+
 
 def cmd_project_list(base_dir: Path, *, state: str | None = None) -> int:
     master = load_master(base_dir)
@@ -58,52 +60,25 @@ def cmd_project_edit(base_dir: Path) -> int:
         print("Project not found.")
         return 2
 
-    # Show summary
-    title = (p.get("title") or pid).strip()
-    state = (p.get("state") or "unknown").strip().lower()
-    due = p.get("due")
-    notes = p.get("notes") or ""
-    counts = count_actions_by_state(actions, pid)
-
-    print("\n--- Project ---")
-    print(f"ID:    {pid}")
-    print(f"Title: {title}")
-    print(f"State: {state}")
-    print(f"Due:   {due}")
-    print(f"Notes: {notes}")
-    print("Actions:", ", ".join(f"{k}={v}" for k, v in sorted(counts.items())))
-    print("--------------\n")
-
-    print("What do you want to do?")
-    print("  1) Edit project fields (title/state/due/notes)")
-    print("  2) Add another action to this project")
-    print("  3) Cancel")
-
-    choice = input("Choose [1-3]: ").strip()
-    if choice == "3" or choice == "":
+    op = choose_project_edit_operation(pid=pid, project=p, actions=actions)
+    if op == "cancel":
         print("Cancelled.")
         return 0
 
-    now = utc_now_iso()
-
-    # ---- 1) edit fields ----
-    if choice == "1":
+    # ---- edit fields ----
+    if op == "edit_fields":
         try:
             updated = prompt_project_edit(p)
         except ValueError as e:
             print(f"Error: {e}")
             return 2
 
-        # preserve completion timestamp logic if state becomes completed
         old_state = (p.get("state") or "").strip().lower()
         new_state = (updated.get("state") or "").strip().lower()
 
+        now = utc_now_iso()
         if old_state != "completed" and new_state == "completed":
-            updated["completed"] = utc_now_iso()
-        elif new_state != "completed":
-            # if reopening, you may want to clear completed stamp
-            # (optional; choose your policy)
-            updated["completed"] = updated.get("completed")
+            updated["completed"] = now
 
         projects[pid] = updated
         master["projects"] = projects
@@ -111,9 +86,8 @@ def cmd_project_edit(base_dir: Path) -> int:
         print("Project updated.")
         return 0
 
-
-    # ---- 2) add action ----
-    if choice == "2":
+    # ---- add action ----
+    if op == "add_action":
         contexts = get_contexts(base_dir)
         now = utc_now_iso()
 
@@ -138,12 +112,10 @@ def cmd_project_edit(base_dir: Path) -> int:
 
         aid = new_id("a")
         actions[aid] = draft
-
         master["actions"] = actions
         save_master(base_dir, master)
         print(f"Added action {aid} to project {pid}.")
         return 0
-
 
     print("Invalid choice.")
     return 2
