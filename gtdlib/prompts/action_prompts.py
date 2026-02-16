@@ -4,7 +4,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-from gtdlib.store import prompt, prompt_optional_date, normalize_context
+from gtdlib.store import normalize_context
+from gtdlib.prompts.common import prompt, prompt_optional_date
 
 
 _RESERVED_CONTEXTS = {"waiting_for", "waiting"}
