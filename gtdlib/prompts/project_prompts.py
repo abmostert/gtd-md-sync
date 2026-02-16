@@ -5,8 +5,8 @@ from pathlib import Path
 
 from gtdlib.prompts.common import prompt, prompt_optional_date
 from copy import deepcopy
+from gtdlib.rules.schema import validate_project_state
 
-_ALLOWED_STATES = {"active", "someday", "completed", "dropped"}
 
 def prompt_project_edit(existing_project: dict) -> dict:
     """
@@ -27,8 +27,7 @@ def prompt_project_edit(existing_project: dict) -> dict:
         raise ValueError("Project title cannot be blank.")
 
     state = prompt("State (active/someday/completed/dropped)", default=current_state).strip().lower()
-    if state not in _ALLOWED_STATES:
-        raise ValueError("Invalid project state. Use active/someday/completed/dropped.")
+    validate_project_state(state)
 
     due = prompt_optional_date("Due date")
     notes = prompt("Notes", default=str(current_notes)).strip()
