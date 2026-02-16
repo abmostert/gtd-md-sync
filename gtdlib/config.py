@@ -1,4 +1,5 @@
-from gtdlib.store import ensure_config, normalize_context
+from gtdlib.store import ensure_config
+from gtdlib.rules.context import normalize_context
 
 
 def get_contexts(base_dir):
