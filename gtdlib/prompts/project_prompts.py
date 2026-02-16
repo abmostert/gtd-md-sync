@@ -3,7 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from pathlib import Path
 
-from gtdlib.prompts.common import prompt, prompt_optional_date_keep
+from gtdlib.prompts.common import prompt, prompt_optional_date, prompt_optional_date_keep
 from gtdlib.rules.schema import validate_project_state
 
 
