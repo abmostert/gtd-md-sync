@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from gtdlib.store import load_master, new_id, save_master, utc_now_iso, prompt_optional_date, prompt
+from gtdlib.store import load_master, new_id, save_master, utc_now_iso
 from gtdlib.config import get_contexts
 
 from gtdlib.prompts.action_prompts import prompt_action_draft, render_action_preview
