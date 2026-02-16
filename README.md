@@ -1,8 +1,8 @@
 # gtd-md-sync
 
-A local-first **Getting Things Done (GTD)** command-line system that keeps a single source of truth in JSON and generates clean Markdown views for daily use — with reliable round-trip sync and email capture support.
+A local-first Getting Things Done (GTD) command-line system that keeps a single source of truth in JSON and generates clean Markdown views for daily use — with reliable round-trip sync and email capture support.
 
-This system is designed for people who want:
+Designed for people who want:
 
 - full control over their data
 - plain text workflows compatible with Linux, Windows, macOS, and mobile
@@ -26,6 +26,26 @@ add / capture → master.json → build → views/*.md
                                   ↑
                                  sync
 ```
+The system is explicit and deterministic. Nothing updates automatically.
+---
+# Architecture
+The codebase is modular and layered:
+```
+gtdlib/
+├── commands/     # CLI orchestration
+├── prompts/      # user interaction logic
+├── rules/        # business logic (pure)
+├── parsing/      # markdown parsing
+├── capture/      # email integration
+├── store.py      # persistence layer
+```
+Design principles:
+
+- Single source of truth (master.json)
+- Markdown views are projections
+- Strict separation of concerns
+- Deterministic build/sync cycle
+- Provider-agnostic capture system
 
 ---
 
@@ -44,11 +64,13 @@ Example workspace (stored in Dropbox or any sync folder):
 │   ├── projects.md
 │   ├── someday.md
 │   ├── waiting_for.md
-│   └── stalled_projects.md
+│   ├── stalled_projects.md
+│   └── agenda.md
 │
 ├── inbox/
 │   ├── inbox.md
 │   └── attachments/
+
 ```
 
 Repository structure:
@@ -58,7 +80,11 @@ gtd-md-sync/
 ├── gtd.py
 ├── gtdlib/
 │   ├── commands/
+│   ├── prompts/
+│   ├── rules/
+│   ├── parsing/
 │   └── capture/
+
 ```
 
 ---
@@ -112,12 +138,32 @@ No external Python dependencies required.
 
 ---
 
+# CLI usage and global workspace directory
+
+```--dir``` is a global argument that specifies your GTD workspace directory.
+Use this pattern consistently:
+```
+python3 gtd.py --dir ~/Dropbox/GTD <command> [command-options]
+```
+Examples:
+```
+python3 gtd.py --dir ~/Dropbox/GTD init
+python3 gtd.py --dir ~/Dropbox/GTD add
+python3 gtd.py --dir ~/Dropbox/GTD build
+python3 gtd.py --dir ~/Dropbox/GTD sync
+python3 gtd.py --dir ~/Dropbox/GTD context list
+python3 gtd.py --dir ~/Dropbox/GTD project list
+python3 gtd.py --dir ~/Dropbox/GTD capture --limit 50
+```
+
+---
+
 # Setup workspace
 
 Choose workspace location (example uses Dropbox):
 
 ```bash
-python3 gtd.py init --dir ~/Dropbox/GTD
+python3 gtd.py --dir ~/Dropbox/GTD init
 ```
 
 This creates:
@@ -138,6 +184,15 @@ Daily cycle:
 ```
 capture → clarify → build → execute → sync → repeat
 ```
+Suggested command loop:
+```
+python3 gtd.py --dir ~/Dropbox/GTD capture
+python3 gtd.py --dir ~/Dropbox/GTD add
+python3 gtd.py --dir ~/Dropbox/GTD build
+# work from Markdown
+python3 gtd.py --dir ~/Dropbox/GTD sync
+python3 gtd.py --dir ~/Dropbox/GTD build
+```
 
 ---
 
@@ -146,35 +201,32 @@ capture → clarify → build → execute → sync → repeat
 Capture new emails:
 
 ```bash
-python3 gtd.py capture --dir ~/Dropbox/GTD
+python3 gtd.py --dir ~/Dropbox/GTD capture
 ```
 
-This creates or updates:
+This updates:
 
-```
-inbox/inbox.md
-inbox/attachments/
-```
+- ```inbox/inbox.md```
+- ```inbox/attachments/```
 
-Example:
+Example ```inbox/attachements/```:
 
 ```
 - [ ] Register bank details for Medicare
   attachments:
-  - attachments/file.pdf
+  - inbox/attachments/20260216_120102_Subject_file.pdf
 ```
 
-Process inbox.md manually:
+Clarify manually in ```inbox/inbox.md```:
 
-- convert into next actions
-- convert into projects
+- convert items into next actions or projects (via ```add```)
 - delete irrelevant items
-- mark processed items with `[x]`
+- mark processed items with ```[x]```
 
-Then sync:
+Then sync to prune checked inbox items:
 
 ```bash
-python3 gtd.py sync --dir ~/Dropbox/GTD
+python3 gtd.py --dir ~/Dropbox/GTD sync
 ```
 
 Processed items are removed from inbox.md.
@@ -186,7 +238,7 @@ Processed items are removed from inbox.md.
 Interactive add:
 
 ```bash
-python3 gtd.py add --dir ~/Dropbox/GTD
+python3 gtd.py --dir ~/Dropbox/GTD add
 ```
 
 Supports:
@@ -202,19 +254,20 @@ Supports multiple actions per project.
 
 # Build Markdown views
 
-Generate updated views:
+Generate updated views from ```master.json```:
 
 ```bash
-python3 gtd.py build --dir ~/Dropbox/GTD
+python3 gtd.py --dir ~/Dropbox/GTD build
 ```
 
-Creates:
+Creates/updates:
 
 ```
 views/next_actions.md
 views/projects.md
 views/someday.md
 views/waiting_for.md
+views/agenda.md
 views/stalled_projects.md
 ```
 
@@ -222,7 +275,7 @@ views/stalled_projects.md
 
 # Completing actions
 
-Mark complete in Markdown:
+Mark complete in Markdown view by ticking the checkbox:
 
 ```
 - [x] Do something important
@@ -231,15 +284,18 @@ Mark complete in Markdown:
 Then sync:
 
 ```bash
-python3 gtd.py sync --dir ~/Dropbox/GTD
+python3 gtd.py --dir ~/Dropbox/GTD sync
 ```
 
 System will:
 
-- mark action completed
-- remove from next actions
-- detect stalled projects
-- prompt for new next actions if needed
+- mark action completed/projects as completed in ```master.json```
+- remove from next actions from relevant views on next ```build```
+- optionally prompt for stalled projects
+To disable stalled-project prompting:
+```
+python3 gtd.py --dir ~/Dropbox/GTD sync --no-prompt-next
+```
 
 ---
 
@@ -251,45 +307,55 @@ When adding an action, choose state:
 waiting
 ```
 
-These appear in:
+You will be prompted for a ```waiting_for``` value (person/thing). Waiting actions appear in:
 
 ```
 views/waiting_for.md
 ```
 
-Once complete, mark `[x]` and sync.
+To complete: tick the item in ```waiting_for.md``` and run ```sync```.
 
 ---
 
 # Stalled project detection
 
-If a project has no active next actions, it appears in:
+A project is considered stalled if it is active and has no open actions (no active and no waiting).
+
+Stalled projects appear in:
 
 ```
 views/stalled_projects.md
 ```
 
-Sync will prompt:
+During sync (unless disabled), the system prompts:
 
 ```
 Project stalled: Publish paper
 Add a next action now? [Y/n]
 ```
+If you add a next action, it is written to ```master.json``` immediately and will appear in views after ```build```.
 
 ---
 
-# Editing projects
+# Project operations
 
 List projects:
 
 ```bash
-python3 gtd.py project --dir ~/Dropbox/GTD list
+python3 gtd.py --dir ~/Dropbox/GTD project list
+```
+Filter by state:
+```
+python3 gtd.py --dir ~/Dropbox/GTD project list --state active
+python3 gtd.py --dir ~/Dropbox/GTD project list --state someday
+python3 gtd.py --dir ~/Dropbox/GTD project list --state completed
+python3 gtd.py --dir ~/Dropbox/GTD project list --state dropped
 ```
 
-Edit project:
+Edit a project:
 
 ```bash
-python3 gtd.py project --dir ~/Dropbox/GTD edit
+python3 gtd.py --dir ~/Dropbox/GTD project edit
 ```
 
 Supports:
@@ -297,37 +363,39 @@ Supports:
 - rename
 - change state
 - change due date
-- add notes
+- add/edit notes
+- add an additional action to the project
 
 ---
 
-# Managing contexts
+# Context Management
 
 List:
 
 ```bash
-python3 gtd.py context --dir ~/Dropbox/GTD list
+python3 gtd.py --dir ~/Dropbox/GTD context list
 ```
 
-Add:
+Add a context:
 
 ```bash
-python3 gtd.py context --dir ~/Dropbox/GTD add work
+python3 gtd.py --dir ~/Dropbox/GTD context add work
 ```
 
-Drop:
+Drop a context:
 
 ```bash
-python3 gtd.py context --dir ~/Dropbox/GTD drop errands
+python3 gtd.py --dir ~/Dropbox/GTD context drop errands
 ```
 
-Contexts are enforced when adding actions.
+Contexts are enforced when adding active actions.
+Waiting actions use ```state=waiting``` and appear in ```waiting_for.md```.
 
 ---
 
 # Sync model
 
-The system follows explicit sync:
+The system follows explicit, deterministic sync loop:
 
 ```
 Markdown → sync → master.json → build → Markdown
@@ -342,21 +410,30 @@ Nothing happens automatically. This ensures safety and transparency.
 Example config.json:
 
 ```json
-"capture": {
-  "enabled": true,
-  "imap_host": "127.0.0.1",
-  "imap_port": 1143,
-  "imap_user": "your@email.com",
-  "imap_password": "bridge_password",
-  "folder": "Stuff Capture"
+{
+  "contexts": ["inbox", "home", "work", "phone", "computer", "errands", "agenda"],
+  "capture": {
+    "imap": {
+      "host": "127.0.0.1",
+      "port": 1143,
+      "username": "your@email.com",
+      "password": "",
+      "folder": "Stuff Capture",
+      "starttls": true,
+      "tls_verify": false
+    }
+  }
 }
 ```
+Notes:
+- If ```password``` is empty, the system will prompt securely at runtime.
+- Proton Bridge commonly uses ```127.0.0.1:1143``` with STARTTLS.
 
 ---
 
 # Recommended storage
 
-Use Dropbox, Google Drive, or similar:
+Use Dropbox, Google Drive, Syncthing or similar:
 
 ```
 ~/Dropbox/GTD/
@@ -364,7 +441,7 @@ Use Dropbox, Google Drive, or similar:
 
 This allows:
 
-- mobile access
+- mobile access (read/edit Markdown)
 - cross-machine sync
 - offline reliability
 
@@ -378,6 +455,12 @@ This allows:
 - Local-first
 - Fully transparent
 - Safe, recoverable workflows
+- Clear separation of concerns:
+  - ```commands/``` orchestration
+  - ```prompts/``` user interaction
+  - ```rules/``` business logic
+  - ```parsing/``` markdown parsing
+  - ```capture/``` external integration
 
 ---
 
@@ -388,10 +471,10 @@ Functional and used in production workflow.
 Supports:
 
 - full GTD workflow
-- email capture
-- multi-machine sync
+- email capture via IMAP/Proton Bridge
+- multi-machine workspace sync
 - waiting-for tracking
-- stalled project detection
+- stalled project detection and prompting
 
 ---
 
@@ -399,11 +482,12 @@ Supports:
 
 Planned:
 
-- project notes files
-- archive system
+- project notes files and richer project editing
+- action editing
+- archive system for completed items
 - review workflows
-- automated capture polling
-- schema versioning and migration
+- multi-capture providers (e.g. Gmail IMAP, file drop, API capture)
+- improved Markdown parsing robustness
 - optional automatic build after sync
 
 ---
