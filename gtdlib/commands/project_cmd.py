@@ -2,20 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from gtdlib.store import (
-    load_master,
-    save_master,
-    prompt,
-    prompt_optional_date,
-    utc_now_iso,
-    ensure_config,
-    normalize_context,
-)
-from gtdlib.prompts.action_prompts import prompt_action_draft, render_action_preview
-from gtdlib.rules.projects import count_actions_by_state
+from gtdlib.store import load_master, save_master, utc_now_iso, new_id
 from gtdlib.prompts.selectors import choose_project_id
-
-
+from gtdlib.prompts.project_prompts import prompt_project_edit
+from gtdlib.prompts.action_prompts import prompt_action_draft, render_action_preview
+from gtdlib.config import get_contexts
+from gtdlib.rules.projects import count_actions_by_state
 
 def cmd_project_list(base_dir: Path, *, state: str | None = None) -> int:
     master = load_master(base_dir)
@@ -96,32 +88,34 @@ def cmd_project_edit(base_dir: Path) -> int:
 
     # ---- 1) edit fields ----
     if choice == "1":
-        new_title = prompt("Title", default=title)
-        new_state = prompt("State (active/someday/completed/dropped)", default=state).strip().lower()
-        if new_state not in {"active", "someday", "completed", "dropped"}:
-            print("Invalid state. No changes saved.")
+        try:
+            updated = prompt_project_edit(p)
+        except ValueError as e:
+            print(f"Error: {e}")
             return 2
 
-        new_due = prompt_optional_date("Due date")
-        new_notes = prompt("Notes", default=notes)
+        # preserve completion timestamp logic if state becomes completed
+        old_state = (p.get("state") or "").strip().lower()
+        new_state = (updated.get("state") or "").strip().lower()
 
-        p["title"] = new_title
-        p["state"] = new_state
-        p["due"] = new_due
-        p["notes"] = new_notes
-        p["reviewed"] = p.get("reviewed")  # keep existing field if present
+        if old_state != "completed" and new_state == "completed":
+            updated["completed"] = utc_now_iso()
+        elif new_state != "completed":
+            # if reopening, you may want to clear completed stamp
+            # (optional; choose your policy)
+            updated["completed"] = updated.get("completed")
 
-        projects[pid] = p
+        projects[pid] = updated
         master["projects"] = projects
         save_master(base_dir, master)
         print("Project updated.")
         return 0
 
+
     # ---- 2) add action ----
     if choice == "2":
-        cfg = ensure_config(base_dir)
-        contexts = [normalize_context(c) for c in cfg.get("contexts", [])]
-        contexts = sorted(set(contexts))
+        contexts = get_contexts(base_dir)
+        now = utc_now_iso()
 
         try:
             draft = prompt_action_draft(
@@ -141,6 +135,15 @@ def cmd_project_edit(base_dir: Path) -> int:
         if confirm in ("n", "no"):
             print("Cancelled. Not saved.")
             return 0
+
+        aid = new_id("a")
+        actions[aid] = draft
+
+        master["actions"] = actions
+        save_master(base_dir, master)
+        print(f"Added action {aid} to project {pid}.")
+        return 0
+
 
         # allocate a new action id via store.new_id if you prefer,
         # but prompt_action_draft returns the dict only, so we assign id here.
