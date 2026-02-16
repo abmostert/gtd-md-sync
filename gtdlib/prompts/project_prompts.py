@@ -3,7 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from pathlib import Path
 
-from gtdlib.prompts.common import prompt, prompt_optional_date
+from gtdlib.prompts.common import prompt, prompt_optional_date_keep
 from gtdlib.rules.schema import validate_project_state
 
 
@@ -22,7 +22,7 @@ def prompt_project_edit(existing_project: dict) -> dict:
         prompt("State (active/someday/completed/dropped)", default=current_state)
     )
 
-    due = prompt_optional_date("Due date")
+    due = prompt_optional_date_keep("Due date", p.get("due"))
     notes = prompt("Notes", default=str(current_notes)).strip()
 
     p["title"] = title
