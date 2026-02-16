@@ -30,7 +30,6 @@ DEFAULT_CONTEXTS = [
     "computer",
     "errands",
     "agenda",
-    "waiting_for",
 ]
 
 
