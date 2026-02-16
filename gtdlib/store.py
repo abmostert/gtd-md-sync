@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 from gtdlib.rules.contexts import normalize_context
+from gtdlib.prompts.common import prompt, prompt_optional_date
+
 
 
 MASTER_FILENAME = "master.json"
