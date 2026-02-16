@@ -48,8 +48,7 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
     completion_map: dict[str, bool] = {}
     for fp in view_files:
         if fp.exists():
-            completion_map.update(extract_completions_from_markdown(fp.read_text(encoding="utf-8"))
-        )
+            completion_map.update(extract_completions_from_markdown(fp.read_text(encoding="utf-8")))
 
     now = utc_now_iso()
     completed_actions = 0
