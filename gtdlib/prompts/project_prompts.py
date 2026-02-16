@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from gtdlib.store import prompt, prompt_optional_date
+from gtdlib.prompts.common import prompt, prompt_optional_date
 
 
 def prompt_project_draft(
