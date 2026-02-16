@@ -4,7 +4,41 @@ from __future__ import annotations
 from pathlib import Path
 
 from gtdlib.prompts.common import prompt, prompt_optional_date
+from copy import deepcopy
 
+_ALLOWED_STATES = {"active", "someday", "completed", "dropped"}
+
+def prompt_project_edit(existing_project: dict) -> dict:
+    """
+    Prompt the user to edit an existing project dict.
+
+    Returns a NEW dict (does not mutate input).
+    Preserves unknown fields by copying the whole dict and updating known keys.
+    """
+    p = deepcopy(existing_project or {})
+
+    current_title = (p.get("title") or "").strip()
+    current_state = (p.get("state") or "active").strip().lower()
+    current_due = p.get("due")
+    current_notes = p.get("notes") or ""
+
+    title = prompt("Title", default=current_title).strip()
+    if not title:
+        raise ValueError("Project title cannot be blank.")
+
+    state = prompt("State (active/someday/completed/dropped)", default=current_state).strip().lower()
+    if state not in _ALLOWED_STATES:
+        raise ValueError("Invalid project state. Use active/someday/completed/dropped.")
+
+    due = prompt_optional_date("Due date")
+    notes = prompt("Notes", default=str(current_notes)).strip()
+
+    p["title"] = title
+    p["state"] = state
+    p["due"] = due
+    p["notes"] = notes
+
+    return p
 
 def prompt_project_draft(
     base_dir: Path,
