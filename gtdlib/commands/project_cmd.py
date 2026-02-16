@@ -145,17 +145,6 @@ def cmd_project_edit(base_dir: Path) -> int:
         return 0
 
 
-        # allocate a new action id via store.new_id if you prefer,
-        # but prompt_action_draft returns the dict only, so we assign id here.
-        from gtdlib.store import new_id
-        aid = new_id("a")
-        actions[aid] = draft
-
-        master["actions"] = actions
-        save_master(base_dir, master)
-        print(f"Added action {aid} to project {pid}.")
-        return 0
-
     print("Invalid choice.")
     return 2
 
