@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Optional
+
 
 def confirm_save_redo_cancel():
     while True:
