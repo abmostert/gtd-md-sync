@@ -9,7 +9,9 @@ from gtdlib.prompts.action_prompts import prompt_action_draft, render_action_pre
 from gtdlib.prompts.confirm import confirm_save_redo_cancel
 from gtdlib.prompts.selectors import choose_project_id
 
-from gtdlib.prompts.project_prompts import prompt_project_draft, render_project_preview    
+from gtdlib.prompts.project_prompts import prompt_project_draft, render_project_preview
+from gtdlib.commands.build_project_notes import ensure_project_notes_for_project
+
 
 
 
@@ -125,6 +127,19 @@ def cmd_add(base_dir: Path) -> int:
         master.setdefault("actions", {})[aid] = first_action_draft
         save_master(base_dir, master)
 
+        # Create/update project folder + project_notes.md immediately (active projects only)
+        try:
+            ensure_project_notes_for_project(
+                base_dir=base_dir,
+                pid=pid,
+                project=project_draft,
+                actions=master.get("actions", {}),
+            )
+        except Exception as e:
+            # Non-fatal: project creation succeeded; notes creation can be repaired via `gtd build`
+            print(f"Note: could not write project notes file ({e}). Run `gtd build` to regenerate.")
+
+        
         print(f"Added project {pid}: {project_draft['title']}")
         print(f"Added first action {aid}: {first_action_draft['title']}")
         return 0
