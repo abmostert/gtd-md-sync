@@ -1,11 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-from datetime import datetime
 
 from gtdlib.store import PROJECTS_DIRNAME
-from gtdlib.rules.projects import iter_actions_for_project
-from gtdlib.rules.projects import count_actions_by_state
 
 
 def _slugify(title: str) -> str:
@@ -44,13 +41,13 @@ def ensure_project_notes_for_project(base_dir: Path, pid: str, project: dict, ac
 
     # Outcome
     lines.append("## Outcome")
-    lines.append(p.get("notes") or "")
+    lines.append(project.get("notes") or "")
     lines.append("")
 
     # Status
     lines.append("## Status")
-    lines.append(f"- State: {p.get('state')}")
-    lines.append(f"- Due: {p.get('due')}")
+    lines.append(f"- State: {project.get('state')}")
+    lines.append(f"- Due: {project.get('due')}")
     lines.append("")
 
     # Sections
@@ -86,7 +83,7 @@ def ensure_project_notes_for_project(base_dir: Path, pid: str, project: dict, ac
 
         lines.append("")
 
-        # Completed archive
+    # Completed archive
     lines.append("## Completed actions (archive)")
     lines.append("")
     for aid, a in actions.items():
