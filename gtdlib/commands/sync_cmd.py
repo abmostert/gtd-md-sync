@@ -54,6 +54,21 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
     completed_actions = 0
     completed_projects = 0
 
+    # Scanning of project notes
+    projects_dir = base_dir / "projects"
+    if projects_dir.exists():
+        for folder in projects_dir.iterdir():
+            if not folder.is_dir():
+                continue
+            pn = folder / "project_notes.md"
+            if pn.exists():
+                completion_map.update(
+                    extract_completions_from_markdown(
+                        pn.read_text(encoding="utf-8")
+                    )
+                )
+  
+
     # Apply completions
     for item_id, done in completion_map.items():
         if not done:
