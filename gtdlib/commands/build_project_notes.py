@@ -22,6 +22,9 @@ def build_project_notes(base_dir: Path, projects: dict, actions: dict) -> None:
     projects_dir.mkdir(parents=True, exist_ok=True)
 
     for pid, p in projects.items():
+        if (p.get("state") or "").strip().lower() != "active":
+                continue
+
         title = (p.get("title") or pid).strip()
         slug = _slugify(title)
         folder_name = f"{slug}__{pid}"
@@ -35,24 +38,7 @@ def build_project_notes(base_dir: Path, projects: dict, actions: dict) -> None:
         lines.append(f"# {title} <!-- id:{pid} -->")
         lines.append("")
 
-        # Instruction block
-        lines.append("<!--")
-        lines.append("HOW TO ADD A NEW ACTION")
-        lines.append("")
-        lines.append("Add a checkbox under the correct section without an id marker.")
-        lines.append("")
-        lines.append("Example:")
-        lines.append("")
-        lines.append("- [ ] draft: Example action title")
-        lines.append("  - context: work")
-        lines.append("  - due: 2026-02-22")
-        lines.append("  - notes: optional notes")
-        lines.append("")
-        lines.append("Run `gtd sync` to assign an ID automatically.")
-        lines.append("-->")
-        lines.append("")
-
-        # Outcome
+               # Outcome
         lines.append("## Outcome")
         lines.append(p.get("notes") or "")
         lines.append("")
@@ -107,9 +93,28 @@ def build_project_notes(base_dir: Path, projects: dict, actions: dict) -> None:
 
             lines.append(f"- [x] {a.get('title')} <!-- id:{aid} -->")
             lines.append(f"  - created: {a.get('created')}")
+            if a.get("due"):
+                lines.append(f"  - due: {a.get('due')}")
             lines.append(f"  - completed: {a.get('completed')}")
             if a.get("notes"):
                 lines.append(f"  - notes: {a.get('notes')}")
             lines.append("")
+
+         # Instruction block
+        lines.append("<!--")
+        lines.append("HOW TO ADD A NEW ACTION")
+        lines.append("")
+        lines.append("Add a checkbox under the correct section without an id marker.")
+        lines.append("")
+        lines.append("Example:")
+        lines.append("")
+        lines.append("- [ ] draft: Example action title")
+        lines.append("  - context: work")
+        lines.append("  - due: 2026-02-22")
+        lines.append("  - notes: optional notes")
+        lines.append("")
+        lines.append("Run `gtd sync` to assign an ID automatically.")
+        lines.append("-->")
+        lines.append("")
 
         file_path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
