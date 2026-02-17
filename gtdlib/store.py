@@ -8,8 +8,7 @@ from pathlib import Path
 from uuid import uuid4
 from gtdlib.rules.contexts import normalize_context
 
-
-
+MASTER_SCHEMA_VERSION = 2
 MASTER_FILENAME = "master.json"
 CONFIG_FILENAME = "config.json"
 VIEWS_DIRNAME = "views"
@@ -34,6 +33,37 @@ DEFAULT_CONTEXTS = [
     "agenda",
 ]
 
+def ensure_master_schema(master: dict) -> tuple[dict, bool]:
+    """
+    Idempotently upgrade master dict in-memory to the latest schema.
+    Returns (master, changed).
+    """
+    changed = False
+    master.setdefault("meta", {})
+    meta = master["meta"]
+
+    current = meta.get("schema_version")
+    if not isinstance(current, int):
+        current = 1
+
+    if current < 2:
+        # v2 adds project.outcome and project.agenda_notes
+        projects = master.get("projects", {})
+        if isinstance(projects, dict):
+            for _, p in projects.items():
+                if not isinstance(p, dict):
+                    continue
+                if "outcome" not in p:
+                    p["outcome"] = ""
+                    changed = True
+                if "agenda_notes" not in p:
+                    p["agenda_notes"] = ""
+                    changed = True
+
+        meta["schema_version"] = 2
+        changed = True
+
+    return master, changed
 
 
 def utc_now_iso() -> str:
@@ -52,7 +82,9 @@ def load_master(base_dir: Path) -> dict:
         raise FileNotFoundError(
             f"No {MASTER_FILENAME} found in {base_dir}. Run `python3 gtd.py init --dir <path>` first."
         )
-    return json.loads(master_path.read_text(encoding="utf-8"))
+    master = json.loads(master_path.read_text(encoding="utf-8"))
+    master, _changed = ensure_master_schema(master)
+    return master
 
 
 def save_master(base_dir: Path, master: dict) -> None:
