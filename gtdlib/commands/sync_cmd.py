@@ -22,6 +22,17 @@ from gtdlib.parsing.markdown import (
 from gtdlib.prompts.stalled_project_prompts import prompt_next_action_for_stalled_project
 
 
+def _merge_completions(dst: dict[str, bool], src: dict[str, bool]) -> None:
+    """
+    Merge completion maps from multiple files.
+
+    Rule: True wins. Never overwrite an existing True with False.
+    """
+    for k, v in src.items():
+        if v:
+            dst[k] = True
+        else:
+            dst.setdefault(k, False)
 
 
 def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
@@ -48,7 +59,7 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
     completion_map: dict[str, bool] = {}
     for fp in view_files:
         if fp.exists():
-            completion_map.update(extract_completions_from_markdown(fp.read_text(encoding="utf-8")))
+            _merge_completions(completion_map, extract_completions_from_markdown(fp.read_text(encoding="utf-8")))
 
     now = utc_now_iso()
     completed_actions = 0
@@ -62,7 +73,7 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
                 continue
             pn = folder / "project_notes.md"
             if pn.exists():
-                completion_map.update(extract_completions_from_markdown(pn.read_text(encoding="utf-8")))
+                _merge_completions(completion_map, extract_completions_from_markdown(fp.read_text(encoding="utf-8")))
   
 
     # Apply completions
