@@ -26,6 +26,10 @@ def ensure_project_notes_for_project(base_dir: Path, pid: str, project: dict, ac
     projects_dir.mkdir(parents=True, exist_ok=True)
 
     title = (project.get("title") or pid).strip()
+    outcome = (project.get("outcome") or "").strip()
+    notes = (project.get("notes") or "").strip()
+    agenda_notes = (project.get("agenda_notes") or "").strip()
+
 
     slug = _slugify(title)
     folder_name = f"{slug}__{pid}"
@@ -41,7 +45,7 @@ def ensure_project_notes_for_project(base_dir: Path, pid: str, project: dict, ac
 
     # Outcome
     lines.append("## Outcome")
-    lines.append(project.get("notes") or "")
+    lines.append(outcome or "")
     lines.append("")
 
     # Status
@@ -50,6 +54,16 @@ def ensure_project_notes_for_project(base_dir: Path, pid: str, project: dict, ac
     lines.append(f"- Due: {project.get('due')}")
     lines.append("")
 
+    #Additional Notes
+    lines.append("## Additional notes")
+    lines.append(notes or "")
+    lines.append("")
+
+    # Agenda Notes
+    lines.append("## Agenda notes")
+    lines.append(agenda_notes or "")
+    lines.append("")
+    
     # Sections
     sections = {
         "active": "## Active actions",
