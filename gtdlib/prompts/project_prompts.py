@@ -13,6 +13,9 @@ def prompt_project_edit(existing_project: dict) -> dict:
     current_title = (p.get("title") or "").strip()
     current_state = (p.get("state") or "active").strip().lower()
     current_notes = p.get("notes") or ""
+    current_outcome = p.get("outcome") or ""
+    current_agenda = p.get("agenda_notes") or ""
+
 
     title = prompt("Title", default=current_title).strip()
     if not title:
@@ -24,11 +27,17 @@ def prompt_project_edit(existing_project: dict) -> dict:
 
     due = prompt_optional_date_keep("Due date", p.get("due"))
     notes = prompt("Notes", default=str(current_notes)).strip()
+    outcome = prompt("Outcome", default=str(current_outcome)).strip()
+    agenda_notes = prompt("Agenda notes", default=str(current_agenda)).strip()
+
 
     p["title"] = title
     p["state"] = state
     p["due"] = due
     p["notes"] = notes
+    p["outcome"] = outcome
+    p["agenda_notes"] = agenda_notes
+
     return p
 
 
@@ -45,9 +54,10 @@ def prompt_project_draft(
     state = validate_project_state(
         prompt("Project state (active/someday/completed/dropped): ", default=default_state)
     )
-
     due = prompt_optional_date("Project due date")
     notes = prompt("Project notes (optional): ", default="")
+    outcome = prompt("Outcome (definition of done) (optional): ", default="").strip()
+    agenda_notes = prompt("Agenda notes (optional): ", default="").strip()
 
     return {
         "title": title,
@@ -56,6 +66,8 @@ def prompt_project_draft(
         "reviewed": None,
         "due": due,
         "notes": notes,
+        "outcome": outcome,
+        "agenda_notes": agenda_notes,
     }
 
 
