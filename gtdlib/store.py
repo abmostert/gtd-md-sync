@@ -42,6 +42,8 @@ def ensure_master_schema(master: dict) -> tuple[dict, bool]:
     master.setdefault("meta", {})
     meta = master["meta"]
 
+    meta.setdefault("version", 1)
+
     current = meta.get("schema_version")
     if not isinstance(current, int):
         current = 1
