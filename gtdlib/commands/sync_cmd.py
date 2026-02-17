@@ -19,6 +19,7 @@ from gtdlib.parsing.markdown import (
     extract_completions_from_markdown,
     prune_checked_top_level_tasks,
 )
+from gtdlib.parsing.project_notes import parse_project_notes
 from gtdlib.prompts.stalled_project_prompts import prompt_next_action_for_stalled_project
 
 
@@ -126,6 +127,54 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
 
     master["actions"] = actions
     master["projects"] = projects
+
+        # -------------------------
+    # Import project notes edits (project_notes.md -> master.json)
+    # -------------------------
+ 
+    project_notes_root = base_dir / "projects"
+
+    if project_notes_root.exists():
+        updated_projects = 0
+
+        for fp in project_notes_root.rglob("project_notes.md"):
+            try:
+                txt = fp.read_text(encoding="utf-8")
+            except Exception:
+                continue
+
+            edits = parse_project_notes(txt)
+            if not edits:
+                continue
+
+            pid = edits.project_id
+            if pid not in projects:
+                continue
+
+            p = projects[pid]
+            changed = False
+
+            # Only update these three fields; do not touch anything else.
+            if (p.get("outcome") or "") != edits.outcome:
+                p["outcome"] = edits.outcome
+                changed = True
+
+            if (p.get("notes") or "") != edits.notes:
+                p["notes"] = edits.notes
+                changed = True
+
+            if (p.get("agenda_notes") or "") != edits.agenda_notes:
+                p["agenda_notes"] = edits.agenda_notes
+                changed = True
+
+            if changed:
+                projects[pid] = p
+                updated_projects += 1
+
+        if updated_projects:
+            print(f"Imported edits from {updated_projects} project note file(s).")
+
+    
     save_master(base_dir, master)
 
     print(f"Sync complete. Marked completed: {completed_actions} actions, {completed_projects} projects.")
