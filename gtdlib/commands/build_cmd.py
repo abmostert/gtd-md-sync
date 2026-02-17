@@ -8,7 +8,7 @@ from gtdlib.rules.projects import (
     count_actions_by_state,
     is_project_stalled,
 )
-
+from gtdlib.commands.build_project_notes import build_project_notes
 
 def cmd_build(base_dir: Path) -> int:
     """
@@ -33,6 +33,7 @@ def cmd_build(base_dir: Path) -> int:
     _build_waiting_for(views_dir, actions, projects)
     _build_agenda(views_dir, actions, projects)
     _build_stalled_projects(views_dir, actions, projects)
+    build_project_notes(base_dir, projects, actions)
 
     print("Views rebuilt.")
     return 0
