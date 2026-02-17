@@ -62,11 +62,7 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
                 continue
             pn = folder / "project_notes.md"
             if pn.exists():
-                completion_map.update(
-                    extract_completions_from_markdown(
-                        pn.read_text(encoding="utf-8")
-                    )
-                )
+                completion_map.update(extract_completions_from_markdown(pn.read_text(encoding="utf-8")))
   
 
     # Apply completions
