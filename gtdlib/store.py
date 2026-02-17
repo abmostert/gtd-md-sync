@@ -13,6 +13,8 @@ from gtdlib.rules.contexts import normalize_context
 MASTER_FILENAME = "master.json"
 CONFIG_FILENAME = "config.json"
 VIEWS_DIRNAME = "views"
+PROJECTS_DIRNAME = "projects"
+
 
 # Starter view files (you can expand later)
 VIEW_FILES: dict[str, str] = {
