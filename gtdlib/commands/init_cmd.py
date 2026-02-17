@@ -37,9 +37,7 @@ def cmd_init(base_dir: Path) -> int:
     master_path = base_dir / "master.json"
     if not master_path.exists():
         master = {
-            "meta": {
-                "version": MASTER_SCHEMA_VERSION,
-            }
+            "meta": {"version": MASTER_SCHEMA_VERSION,},
             "projects": {},
             "actions": {},
         }
