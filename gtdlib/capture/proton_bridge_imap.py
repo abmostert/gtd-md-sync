@@ -18,6 +18,9 @@ class ProtonBridgeConfig:
     folder: str
     starttls: bool = True
     tls_verify: bool = False
+    post_fetch: str = "none"
+    move_to: str | None = None
+
 
 
 
@@ -34,6 +37,10 @@ def load_proton_bridge_config(base_dir: Path) -> ProtonBridgeConfig:
     folder = str(imap.get("folder", "")).strip()
     starttls = bool(imap.get("starttls", True))
     tls_verify = bool(imap.get("tls_verify", False))
+    post_fetch = str(imap.get("post_fetch", "none")).strip().lower()
+    move_to = imap.get("move_to")
+    move_to = str(move_to).strip() if move_to else None
+
 
     if not password:
         password = getpass.getpass(
@@ -65,5 +72,7 @@ def fetch_capture_emails(base_dir: Path, attachments_dir: Path, limit: int = 50)
         search_query="ALL",
         starttls=cfg.starttls,
         tls_verify=cfg.tls_verify,
+        post_fetch=cfg.post_fetch,
+        move_to=cfg.move_to,
     )
 
