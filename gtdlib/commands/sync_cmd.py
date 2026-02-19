@@ -21,6 +21,7 @@ from gtdlib.parsing.markdown import (
 )
 from gtdlib.parsing.project_notes import parse_project_notes
 from gtdlib.prompts.stalled_project_prompts import prompt_next_action_for_stalled_project
+from gtdlib.rules.contexts import normalize_context
 
 
 def _merge_completions(dst: dict[str, bool], src: dict[str, bool]) -> None:
@@ -130,14 +131,17 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
 
         # -------------------------
     # Import project notes edits (project_notes.md -> master.json)
+    #   - updates project fields: outcome / notes / agenda_notes
+    #   - imports NEW draft actions (checkbox lines without <!-- id:... -->)
     # -------------------------
- 
+
     project_notes_root = base_dir / "projects"
 
     if project_notes_root.exists():
         updated_projects = 0
+        created_actions = 0
 
-        for fp in project_notes_root.rglob("project_notes.md"):
+        for fp in project_notes_root.rglob("@project_notes.md"):
             try:
                 txt = fp.read_text(encoding="utf-8")
             except Exception:
@@ -151,10 +155,12 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
             if pid not in projects:
                 continue
 
+            now = utc_now_iso()
+
+            # ---- project field edits ----
             p = projects[pid]
             changed = False
 
-            # Only update these three fields; do not touch anything else.
             if (p.get("outcome") or "") != edits.outcome:
                 p["outcome"] = edits.outcome
                 changed = True
@@ -171,8 +177,59 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
                 projects[pid] = p
                 updated_projects += 1
 
+            # ---- NEW draft actions (no id marker in the file) ----
+            # parse_project_notes() should provide edits.draft_actions: list[DraftAction]
+            for da in getattr(edits, "draft_actions", []) or []:
+                section = (getattr(da, "section", "") or "").strip().lower()
+                title = (getattr(da, "title", "") or "").strip()
+                if not title:
+                    continue
+
+                if section == "active":
+                    state = "active"
+                    waiting_for = None
+                    ctx_raw = (getattr(da, "context", "") or "").strip()
+                    context = normalize_context(ctx_raw) if ctx_raw else "inbox"
+
+                elif section == "someday":
+                    state = "someday"
+                    waiting_for = None
+                    ctx_raw = (getattr(da, "context", "") or "").strip()
+                    context = normalize_context(ctx_raw) if ctx_raw else "inbox"
+
+                elif section == "waiting":
+                    state = "waiting"
+                    wf_raw = (getattr(da, "waiting_for", "") or "").strip()
+                    waiting_for = wf_raw or "unspecified"
+                    # waiting items do not need a context (and should not use reserved words)
+                    context = None
+
+                else:
+                    continue
+
+                due_raw = (getattr(da, "due", "") or "").strip()
+                notes_raw = getattr(da, "notes", "") or ""
+
+                aid = new_id("a")
+                actions[aid] = {
+                    "title": title,
+                    "project": pid,
+                    "state": state,
+                    "context": context,
+                    "waiting_for": waiting_for,
+                    "created": now,
+                    "last_touched": now,
+                    "waiting_since": now if state == "waiting" else None,
+                    "due": due_raw or None,
+                    "notes": str(notes_raw),
+                }
+                created_actions += 1
+
         if updated_projects:
             print(f"Imported edits from {updated_projects} project note file(s).")
+        if created_actions:
+            print(f"Created {created_actions} action(s) from draft items in project notes.")
+
 
     
     save_master(base_dir, master)
