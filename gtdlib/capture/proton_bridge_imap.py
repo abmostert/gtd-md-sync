@@ -56,7 +56,7 @@ def load_proton_bridge_config(base_dir: Path) -> ProtonBridgeConfig:
         )
 
     return ProtonBridgeConfig(host=host, port=port, username=username, password=password, folder=folder, starttls=starttls,
-        tls_verify=tls_verify)
+        tls_verify=tls_verify, post_fetch=post_fetch, move_to=move_to,)
 
 
 def fetch_capture_emails(base_dir: Path, attachments_dir: Path, limit: int = 50) -> list[CapturedEmail]:
