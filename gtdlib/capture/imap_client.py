@@ -4,12 +4,14 @@ import imaplib
 import os
 import re
 import ssl
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from email import message_from_bytes
 from email.message import Message
 from pathlib import Path
 from typing import Iterable
+
 
 
 
@@ -259,9 +261,24 @@ def fetch_from_imap(
         # newest first
         uids = list(reversed(uids))[:limit]
 
+        total_found = len((data[0] or b"").split())
+        total_processing = len(uids)
+        print(f"[capture] Found {total_found} message(s). Processing {total_processing}...")
+
+        # Determine 10% step (minimum 1 to avoid division issues)
+        progress_step = max(1, total_processing // 10)
+
+        t0 = time.perf_counter()
+
         results: list[CapturedEmail] = []
-        for uid_b in uids:
+        for idx, uid_b in enumerate(uids, start=1):
+
             uid = uid_b.decode("utf-8", errors="replace")
+            
+            if idx == 1 or idx % progress_step == 0 or idx == total_processing:
+                percent = int((idx / total_processing) * 100)
+                print(f"[capture] {percent}% ({idx}/{total_processing})")
+            
             typ, msg_data = m.uid("fetch", uid, "(RFC822)")
             if typ != "OK" or not msg_data or not msg_data[0]:
                 continue
@@ -285,6 +302,10 @@ def fetch_from_imap(
                     _imap_delete_uid(m, uid)
                 else:
                     raise RuntimeError(f"Unknown post_fetch mode: {post_fetch}")
+
+        elapsed = time.perf_counter() - t0
+        avg = (elapsed / len(results)) if results else 0.0
+        print(f"[capture] Done. Processed {len(results)} message(s) in {elapsed:.1f}s ({avg:.2f}s/msg)")
 
 
         return results
