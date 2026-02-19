@@ -36,7 +36,7 @@ def ensure_project_notes_for_project(base_dir: Path, pid: str, project: dict, ac
     proj_dir = projects_dir / folder_name
     proj_dir.mkdir(parents=True, exist_ok=True)
 
-    file_path = proj_dir / "project_notes.md"
+    file_path = proj_dir / "@project_notes.md"
 
     lines: list[str] = []
 
