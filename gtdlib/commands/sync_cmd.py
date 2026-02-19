@@ -141,7 +141,7 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
         updated_projects = 0
         created_actions = 0
 
-        for fp in project_notes_root.rglob("@project_notes.md"):
+        for fp in (list(project_notes_root.rglob("@project_notes.md")) + list(project_notes_root.rglob("project_notes.md"))):
             try:
                 txt = fp.read_text(encoding="utf-8")
             except Exception:
