@@ -182,6 +182,34 @@ def _save_attachments(msg: Message, attachments_dir: Path, subject: str) -> list
 
     return out
 
+def _imap_delete_uid(m: imaplib.IMAP4, uid: str) -> None:
+    # Mark deleted and expunge
+    typ, _ = m.uid("store", uid, "+FLAGS", r"(\Deleted)")
+    if typ != "OK":
+        raise RuntimeError(f"Failed to mark uid {uid} as deleted")
+    typ, _ = m.expunge()
+    if typ != "OK":
+        raise RuntimeError("Failed to expunge deleted messages")
+
+
+def _imap_move_uid(m: imaplib.IMAP4, uid: str, dest_folder: str) -> None:
+    """
+    Try UID MOVE if supported, else COPY + DELETE fallback.
+    """
+    dest = _quote_mailbox(dest_folder)
+
+    # Try MOVE first (RFC 6851). Some servers support it.
+    typ, _ = m.uid("move", uid, dest)
+    if typ == "OK":
+        return
+
+    # Fallback: COPY then delete+expunge
+    typ, _ = m.uid("copy", uid, dest)
+    if typ != "OK":
+        raise RuntimeError(f"Failed to move uid {uid}: MOVE and COPY both failed")
+    _imap_delete_uid(m, uid)
+
+
 
 def fetch_from_imap(
     *,
@@ -195,6 +223,9 @@ def fetch_from_imap(
     search_query: str = "ALL",
     starttls: bool = True,
     tls_verify: bool = False,
+    post_fetch: str = "none",   # "none" | "move" | "delete"
+    move_to: str | None = None
+
 ) -> list[CapturedEmail]:
     """
     Fetch messages from IMAP folder using UID fetch.
@@ -211,7 +242,9 @@ def fetch_from_imap(
         m.login(username, password)
 
         mailbox = _quote_mailbox(folder)
-        typ, _ = m.select(mailbox, readonly=True)
+        readonly = (post_fetch == "none")
+        typ, _ = m.select(mailbox, readonly=readonly)
+
         if typ != "OK":
             raise RuntimeError(f"Failed to select folder: {folder}")
 
@@ -241,6 +274,18 @@ def fetch_from_imap(
             atts = _save_attachments(msg, out_attachments_dir, subject)
 
             results.append(CapturedEmail(uid=uid, subject=subject, body_text=body, attachments=atts))
+
+            # Post-fetch handling to prevent re-capture loops
+            if post_fetch != "none":
+                if post_fetch == "move":
+                    if not move_to:
+                        raise RuntimeError("post_fetch=move requires move_to folder")
+                    _imap_move_uid(m, uid, move_to)
+                elif post_fetch == "delete":
+                    _imap_delete_uid(m, uid)
+                else:
+                    raise RuntimeError(f"Unknown post_fetch mode: {post_fetch}")
+
 
         return results
 
