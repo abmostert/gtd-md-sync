@@ -61,6 +61,8 @@ def load_proton_bridge_config(base_dir: Path) -> ProtonBridgeConfig:
 
 def fetch_capture_emails(base_dir: Path, attachments_dir: Path, limit: int = 50) -> list[CapturedEmail]:
     cfg = load_proton_bridge_config(base_dir)
+    print(f"[capture] post_fetch={cfg.post_fetch!r} move_to={cfg.move_to!r}")
+
     return fetch_from_imap(
         host=cfg.host,
         port=cfg.port,
