@@ -20,7 +20,7 @@ from gtdlib.rules.project_folders import (
     ARCHIVES_ROOT,
 )
 from gtdlib.rules.schema import PROJECT_LIFECYCLES  # if you named it differently, adjust
-
+from gtdlib.commands.build_project_notes import ensure_project_notes_for_project
 
 def cmd_project_list(base_dir: Path, *, state: str | None = None) -> int:
     master = load_master(base_dir)
@@ -403,6 +403,11 @@ def cmd_project_archive_finalize(base_dir: Path) -> int:
         print("Project folder not found in review/.")
         return 2
 
+    ensure_project_notes_for_project(base_dir, pid, projects[pid], actions)
+    
+    written = ensure_project_notes_for_project(base_dir, pid, projects[pid], actions)
+    print("Refreshed notes:", written)
+    
     title = (p.get("title") or pid).strip()
 
     print("\nArchive-finalize will:")
