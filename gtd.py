@@ -10,8 +10,16 @@ from gtdlib.commands.init_cmd import cmd_init
 from gtdlib.commands.build_cmd import cmd_build
 from gtdlib.commands.sync_cmd import cmd_sync
 from gtdlib.commands.context_cmd import cmd_context_list, cmd_context_add, cmd_context_drop
-from gtdlib.commands.project_cmd import cmd_project_list, cmd_project_edit
 from gtdlib.commands.capture_cmd import cmd_capture
+from gtdlib.commands.project_cmd import (
+    cmd_project_list,
+    cmd_project_edit,
+    cmd_project_complete,
+    cmd_project_delete,
+    cmd_project_archive_finalize,
+    cmd_project_trash_purge,
+)
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(
@@ -49,10 +57,25 @@ def main() -> int:
     p_c_drop.add_argument("name", help="Context name to remove")
 
     p_project = sub.add_parser("project", help="Project operations")
+    p_project.add_argument("--dir", default=".", help="GTD workspace directory (default: current directory)")
     proj = p_project.add_subparsers(dest="proj_cmd", required=True)
 
     p_proj_list = proj.add_parser("list", help="List projects")
-    p_proj_list.add_argument("--state", default="", help="Filter by state (active/someday/completed/dropped)")
+    p_proj_list.add_argument("--state", default="", help="Filter by state (active/someday/completed)")
+
+    p_proj_edit = proj.add_parser("edit", help="Edit a project")
+
+    p_proj_complete = proj.add_parser("complete", help="Mark a project completed and move folder to review/")
+    # no args yet
+
+    p_proj_delete = proj.add_parser("delete", help="Move project folder to trash/ (soft delete) or permanently delete")
+    p_proj_delete.add_argument("--hard", action="store_true", help="Permanently delete immediately")
+
+    p_proj_archive = proj.add_parser("archive-finalize", help="Finalize review: archive folder + remove from master.json")
+
+    p_proj_purge = proj.add_parser("trash-purge", help="Purge trashed projects older than N days")
+    p_proj_purge.add_argument("--dry-run", action="store_true", help="Show what would be purged without deleting")
+    p_proj_purge.add_argument("--days", type=int, default=28, help="Retention period in days (default: 28)")
 
     proj.add_parser("edit", help="Edit a project")
 
@@ -83,11 +106,20 @@ def main() -> int:
             return cmd_context_drop(base_dir, args.name)
 
     if args.cmd == "project":
+        base_dir = Path(args.dir).expanduser().resolve()
         if args.proj_cmd == "list":
             state = args.state.strip() or None
             return cmd_project_list(base_dir, state=state)
         if args.proj_cmd == "edit":
             return cmd_project_edit(base_dir)
+        if args.proj_cmd == "complete":
+            return cmd_project_complete(base_dir)
+        if args.proj_cmd == "delete":
+            return cmd_project_delete(base_dir, hard=bool(args.hard))
+        if args.proj_cmd == "archive-finalize":
+            return cmd_project_archive_finalize(base_dir)
+        if args.proj_cmd == "trash-purge":
+            return cmd_project_trash_purge(base_dir, dry_run=bool(args.dry_run), days=int(args.days))
 
     if args.cmd == "capture":
         return cmd_capture(base_dir, limit=args.limit)
