@@ -57,7 +57,6 @@ def main() -> int:
     p_c_drop.add_argument("name", help="Context name to remove")
 
     p_project = sub.add_parser("project", help="Project operations")
-    p_project.add_argument("--dir", default=".", help="GTD workspace directory (default: current directory)")
     proj = p_project.add_subparsers(dest="proj_cmd", required=True)
 
     p_proj_list = proj.add_parser("list", help="List projects")
@@ -76,8 +75,6 @@ def main() -> int:
     p_proj_purge = proj.add_parser("trash-purge", help="Purge trashed projects older than N days")
     p_proj_purge.add_argument("--dry-run", action="store_true", help="Show what would be purged without deleting")
     p_proj_purge.add_argument("--days", type=int, default=28, help="Retention period in days (default: 28)")
-
-    proj.add_parser("edit", help="Edit a project")
 
     p_capture = sub.add_parser("capture", help="Fetch capture emails into inbox/inbox.md")
     p_capture.add_argument("--limit", type=int, default=50, help="Max emails to fetch (default: 50)")
@@ -106,7 +103,6 @@ def main() -> int:
             return cmd_context_drop(base_dir, args.name)
 
     if args.cmd == "project":
-        base_dir = Path(args.dir).expanduser().resolve()
         if args.proj_cmd == "list":
             state = args.state.strip() or None
             return cmd_project_list(base_dir, state=state)
