@@ -388,7 +388,7 @@ def cmd_project_archive_finalize(base_dir: Path) -> int:
         print("No projects in review lifecycle to archive-finalize.")
         return 0
 
-    pid = choose_project_id(eligible, allow_states=None)
+    pid = choose_project_id(projects, allow_lifecycles={"review"}, show_ids=True)
     if not pid:
         print("Cancelled.")
         return 0
