@@ -67,7 +67,7 @@ def _build_next_actions(views_dir: Path, actions: dict, projects: dict) -> None:
         )
         for aid, a in items:
             title = (a.get("title") or "").strip()
-            due_prefix = f"(due {a['due']}) " if a.get("due") else ""
+            due_prefix = f"({a['due']}) " if a.get("due") else ""
             proj_prefix = ""
             pid = a.get("project")
             if pid and pid in projects:
