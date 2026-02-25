@@ -66,15 +66,16 @@ def _build_next_actions(views_dir: Path, actions: dict, projects: dict) -> None:
             key=lambda t: ((t[1].get("due") or "9999-12-31"), t[1].get("title", "")),
         )
         for aid, a in items:
-            due = f" (due {a['due']})" if a.get("due") else ""
-            proj_label = ""
+            title = (a.get("title") or "").strip()
+            due_prefix = f"(due {a['due']}) " if a.get("due") else ""
+            proj_prefix = ""
             pid = a.get("project")
             if pid and pid in projects:
                 proj_title = (projects[pid].get("title") or "").strip()
                 if proj_title:
-                    proj_label = f" [{proj_title}]"
+                    proj_prefix = f"[{proj_title}] "
 
-            lines.append(f"- [ ] {a.get('title','')}{proj_label}{due} {_id_comment(aid)}")
+            lines.append(f"- [ ] {due_prefix}{proj_prefix}{title} {_id_comment(aid)}")
 
         lines.append("")
 
