@@ -388,7 +388,7 @@ def cmd_project_archive_finalize(base_dir: Path) -> int:
         print("No projects in review lifecycle to archive-finalize.")
         return 0
 
-    pid = choose_project_id(projects, allow_lifecycles={"review"}, show_ids=True)
+    pid = choose_project_id(eligible, allow_lifecycles={"review"}, show_ids=True)
     if not pid:
         print("Cancelled.")
         return 0
@@ -404,10 +404,7 @@ def cmd_project_archive_finalize(base_dir: Path) -> int:
         return 2
 
     ensure_project_notes_for_project(base_dir, pid, projects[pid], actions)
-    
-    written = ensure_project_notes_for_project(base_dir, pid, projects[pid], actions)
-    print("Refreshed notes:", written)
-    
+  
     title = (p.get("title") or pid).strip()
 
     print("\nArchive-finalize will:")
