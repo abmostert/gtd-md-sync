@@ -87,7 +87,7 @@ def main() -> int:
         return cmd_init(base_dir)
 
     if args.cmd == "add":
-        return cmd_add(base_dir)
+        return cmd_add(base_dir, full=bool(args.full))
 
     if args.cmd == "build":
         return cmd_build(base_dir)
