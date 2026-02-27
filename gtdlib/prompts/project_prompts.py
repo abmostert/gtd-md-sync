@@ -46,6 +46,7 @@ def prompt_project_draft(
     *,
     now_iso: str,
     default_state: str = "active",
+    full: bool = False,
 ) -> dict:
     title = prompt("Project title (outcome): ").strip()
     if not title:
@@ -55,9 +56,14 @@ def prompt_project_draft(
         prompt("Project state (active/someday/completed/dropped): ", default=default_state)
     )
     due = prompt_optional_date("Project due date")
-    notes = prompt("Project notes (optional): ", default="")
-    outcome = prompt("Outcome (definition of done) (optional): ", default="").strip()
-    agenda_notes = prompt("Agenda notes (optional): ", default="").strip()
+
+    notes = ""
+    outcome = ""
+    agenda_notes = ""
+    if full:
+        notes = prompt("Project notes (optional): ", default="")
+        outcome = prompt("Outcome (definition of done) (optional): ", default="").strip()
+        agenda_notes = prompt("Agenda notes (optional): ", default="").strip()
 
     return {
         "title": title,
@@ -68,6 +74,7 @@ def prompt_project_draft(
         "notes": notes,
         "outcome": outcome,
         "agenda_notes": agenda_notes,
+        "lifecycle": "live",
     }
 
 
