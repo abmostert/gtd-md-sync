@@ -21,6 +21,10 @@ def is_project_stalled(projects: dict, actions: dict, project_id: str) -> bool:
     if not p:
         return False
 
+    lifecycle = (p.get("lifecycle") or "live").strip().lower()
+    if lifecycle != "live":
+        return False
+    
     if (p.get("state") or "").strip().lower() != "active":
         return False
 
