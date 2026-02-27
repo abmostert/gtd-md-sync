@@ -29,6 +29,7 @@ def prompt_next_action_for_stalled_project(
         project_id=project_id,
         default_state="active",
         ask_context_when_waiting=False,
+        full=False
     )
 
     render_action_preview(draft)
