@@ -39,6 +39,7 @@ def main() -> int:
     p_init = sub.add_parser("init", help="Create master.json + views/ with starter Markdown files")
 
     p_add = sub.add_parser("add", help="Interactive add (project/action)")
+    p_add.add_argument("--full", action="store_true", help="Use full prompts (ask all fields). Default is quick mode.")
 
     p_build = sub.add_parser("build", help="Generate Markdown views from master.json")
 
