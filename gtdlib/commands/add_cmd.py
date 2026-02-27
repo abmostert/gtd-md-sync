@@ -15,7 +15,7 @@ from gtdlib.commands.build_project_notes import ensure_project_notes_for_project
 
 
 
-def cmd_add(base_dir: Path) -> int:
+def cmd_add(base_dir: Path, *, full: bool = False) -> int:
     """
     Interactive add command.
 
@@ -54,6 +54,7 @@ def cmd_add(base_dir: Path) -> int:
                     project_id=project_id,
                     default_state="active",
                     ask_context_when_waiting=False,
+                    full=full
                 )
             except ValueError as e:
                 print(str(e))
@@ -85,10 +86,33 @@ def cmd_add(base_dir: Path) -> int:
     # If we reach here, kind == "p"
     while True:
         try:
-            project_draft = prompt_project_draft(base_dir, now_iso=now, default_state="active")
+            project_draft = prompt_project_draft(
+                base_dir,
+                now_iso=now,
+                default_state="active",
+                full=full
+            )
+                    
         except ValueError as e:
             print(str(e))
             continue
+
+        if project_draft.get("state") == "someday":
+            pid = new_id("p")
+            render_project_preview(pid, project_draft)
+
+            decision = confirm_save_redo_cancel()
+        if decision == "c":
+            print("Cancelled. Nothing saved.")
+            return 0
+        if decision == "r":
+            print("Redoing...\n")
+            continue
+
+        master.setdefault("projects", {})[pid] = project_draft
+        save_master(base_dir, master)
+        print(f"Added someday project {pid}: {project_draft['title']}")
+        return 0
 
         # Create IDs early so the previews show the real IDs
         pid = new_id("p")
