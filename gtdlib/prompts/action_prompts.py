@@ -95,6 +95,7 @@ def prompt_action_draft(
     project_id: Optional[str] = None,
     default_state: str = "active",
     ask_context_when_waiting: bool = False,
+    full: bool = False
 ) -> dict:
     """
     Canonical interactive prompt for creating an action dict.
@@ -119,7 +120,9 @@ def prompt_action_draft(
         context = choose_context(contexts)
 
     due = prompt_optional_date("Due date")
-    notes = prompt("Notes (optional): ", default="").strip()
+    notes = ""
+        if full:
+            notes = prompt("Notes (optional): ", default="").strip()
 
     action = {
         "title": title,
