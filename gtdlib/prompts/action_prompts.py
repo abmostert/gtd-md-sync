@@ -121,8 +121,8 @@ def prompt_action_draft(
 
     due = prompt_optional_date("Due date")
     notes = ""
-        if full:
-            notes = prompt("Notes (optional): ", default="").strip()
+    if full:
+        notes = prompt("Notes (optional): ", default="").strip()
 
     action = {
         "title": title,
