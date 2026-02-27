@@ -84,41 +84,41 @@ def cmd_add(base_dir: Path, *, full: bool = False) -> int:
     # PROJECT BRANCH
     # -------------------------
     # If we reach here, kind == "p"
+    # kind == "p"
     while True:
         try:
             project_draft = prompt_project_draft(
                 base_dir,
                 now_iso=now,
                 default_state="active",
-                full=full
+                full=full,
             )
-                    
         except ValueError as e:
             print(str(e))
             continue
 
+        pid = new_id("p")
+
+        # If someday: preview + confirm + save project ONLY, then return
         if project_draft.get("state") == "someday":
-            pid = new_id("p")
             render_project_preview(pid, project_draft)
 
             decision = confirm_save_redo_cancel()
-        if decision == "c":
-            print("Cancelled. Nothing saved.")
+            if decision == "c":
+                print("Cancelled. Nothing saved.")
+                return 0
+            if decision == "r":
+                print("Redoing...\n")
+                continue
+
+            master.setdefault("projects", {})[pid] = project_draft
+            save_master(base_dir, master)
+            print(f"Added someday project {pid}: {project_draft['title']}")
             return 0
-        if decision == "r":
-            print("Redoing...\n")
-            continue
 
-        master.setdefault("projects", {})[pid] = project_draft
-        save_master(base_dir, master)
-        print(f"Added someday project {pid}: {project_draft['title']}")
-        return 0
-
-        # Create IDs early so the previews show the real IDs
-        pid = new_id("p")
+        # Otherwise (active project): create first action and do combined confirm
         aid = new_id("a")
 
-        # First next action: reuse your unified action prompt
         try:
             first_action_draft = prompt_action_draft(
                 base_dir,
@@ -127,13 +127,12 @@ def cmd_add(base_dir: Path, *, full: bool = False) -> int:
                 project_id=pid,
                 default_state="active",
                 ask_context_when_waiting=False,
+                full=full,
             )
         except ValueError as e:
             print(str(e))
-            # let them redo the whole project flow
             continue
 
-        # Preview
         render_project_preview(pid, project_draft)
         print("--- First action preview ---")
         print(f"Action ID:  {aid}")
@@ -151,22 +150,7 @@ def cmd_add(base_dir: Path, *, full: bool = False) -> int:
         master.setdefault("actions", {})[aid] = first_action_draft
         save_master(base_dir, master)
 
-        # Create/update project folder + project_notes.md immediately (active projects only)
-        try:
-            ensure_project_notes_for_project(
-                base_dir=base_dir,
-                pid=pid,
-                project=project_draft,
-                actions=master.get("actions", {}),
-            )
-        except Exception as e:
-            # Non-fatal: project creation succeeded; notes creation can be repaired via `gtd build`
-            print(f"Note: could not write project notes file ({e}). Run `gtd build` to regenerate.")
-
-        
         print(f"Added project {pid}: {project_draft['title']}")
         print(f"Added first action {aid}: {first_action_draft['title']}")
         return 0
-
-
 
