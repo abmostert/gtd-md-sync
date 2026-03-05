@@ -174,10 +174,6 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
                 changed = True
 
             if changed:
-                print(f"[debug] project notes changed: {pid} file={fp}")
-                print(f"[debug] outcome: {p.get('outcome')!r} -> {edits.outcome!r}")
-                print(f"[debug] notes: {p.get('notes')!r} -> {edits.notes!r}")
-                print(f"[debug] agenda_notes: {p.get('agenda_notes')!r} -> {edits.agenda_notes!r}")
                 projects[pid] = p
                 updated_projects += 1
 
