@@ -9,6 +9,14 @@ from gtdlib.rules.projects import (
     is_project_stalled,
 )
 from gtdlib.commands.build_project_notes import build_project_notes
+from gtdlib.rules.visibility import (
+    is_active_project,
+    is_someday_project,
+    is_visible_agenda_action,
+    is_visible_next_action,
+    is_visible_someday_action,
+    is_visible_waiting_action,
+)
 
 def cmd_build(base_dir: Path) -> int:
     """
@@ -195,31 +203,12 @@ def _build_someday(views_dir: Path, projects: dict, actions: dict) -> None:
 def _build_waiting_for(views_dir: Path, actions: dict, projects: dict) -> None:
     lines: list[str] = ["# Waiting For", ""]
 
-    items: list[tuple[str, dict]] = []
-
-    for aid, a in actions.items():
-        if a.get("state") != "waiting":
-            continue
-
-        pid = a.get("project")
-
-        # Standalone waiting-for items are allowed.
-        if not pid:
-            items.append((aid, a))
-            continue
-
-        project = projects.get(pid)
-        if not project:
-            continue
-
-        lifecycle = (project.get("lifecycle") or "live").strip().lower()
-        if lifecycle != "live":
-            continue
-
-        if (project.get("state") or "active").strip().lower() != "active":
-            continue
-
-        items.append((aid, a))
+        
+    items: list[tuple[str, dict]] = [
+        (aid, a)
+        for aid, a in actions.items()
+        if is_visible_waiting_action(a, projects)
+    ]
 
     if not items:
         lines.append("_No waiting items._")
