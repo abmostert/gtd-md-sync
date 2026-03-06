@@ -12,7 +12,7 @@ META_RE = re.compile(r"^\s{2,}-\s*(?P<key>[a-zA-Z0-9_]+)\s*:\s*(?P<val>.*)\s*$")
 
 @dataclass
 class DraftAction:
-    section: str          # "active" | "waiting" | "someday"
+    section: str          # "active" | "waiting" | "someday" | "agenda"
     title: str
     context: Optional[str] = None
     due: Optional[str] = None
@@ -48,6 +48,8 @@ def _map_section(h2: str) -> Optional[str]:
         return "waiting"
     if k == "someday actions":
         return "someday"
+    if k in ("agenda", "agenda actions"):
+        return "agenda"
     return None
 
 
