@@ -213,6 +213,13 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
                     ctx_raw = (getattr(da, "context", "") or "").strip()
                     context = normalize_context(ctx_raw) if ctx_raw else "inbox"
 
+                elif section == "agenda":
+                    state = "active"
+                    waiting_for = None
+                    ctx_raw = (getattr(da, "context", "") or "").strip()
+                    who = normalize_context(ctx_raw) if ctx_raw else "unspecified"
+                    context = f"agenda_{who}"
+
                 elif section == "someday":
                     state = "someday"
                     waiting_for = None
@@ -223,6 +230,7 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
                     state = "waiting"
                     wf_raw = (getattr(da, "waiting_for", "") or "").strip()
                     waiting_for = wf_raw or "unspecified"
+
                     # waiting items do not need a context (and should not use reserved words)
                     context = None
 
