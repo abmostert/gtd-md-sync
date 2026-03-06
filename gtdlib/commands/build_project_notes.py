@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from gtdlib.store import PROJECTS_DIRNAME
-
+from gtdlib.rules.project_folders import find_project_folder
 
 def _slugify(title: str) -> str:
     import re
@@ -31,6 +31,46 @@ def _project_root_for_lifecycle(base_dir: Path, lifecycle: str) -> Path | None:
         return base_dir / "trash"
     return None
 
+def _resolve_project_dir(base_dir: Path, pid: str, title: str, lifecycle: str) -> Path | None:
+    """
+    Find the existing folder for this PID if it already exists, and reconcile it
+    to the desired lifecycle root + current title slug.
+
+    Rules:
+    - PID is identity
+    - slug is presentation
+    - move/rename the existing folder instead of creating a second one
+    - do not try to merge if the target already exists
+    """
+    root = _project_root_for_lifecycle(base_dir, lifecycle)
+    if root is None:
+        return None
+
+    root.mkdir(parents=True, exist_ok=True)
+
+    slug = _slugify(title)
+    desired_dir = root / f"{slug}__{pid}"
+
+    match = find_project_folder(base_dir, pid)
+
+    if match is None:
+        desired_dir.mkdir(parents=True, exist_ok=True)
+        return desired_dir
+
+    current_dir = match.path
+
+    if current_dir == desired_dir:
+        current_dir.mkdir(parents=True, exist_ok=True)
+        return current_dir
+
+    desired_dir.parent.mkdir(parents=True, exist_ok=True)
+
+    if desired_dir.exists():
+        print(f"Warning: target project folder already exists for {pid}: {desired_dir}")
+        return desired_dir
+
+    current_dir.rename(desired_dir)
+    return desired_dir
 
 def ensure_project_notes_for_project(base_dir: Path, pid: str, project: dict, actions: dict) -> Path | None:
     """
@@ -56,10 +96,9 @@ def ensure_project_notes_for_project(base_dir: Path, pid: str, project: dict, ac
     notes = (project.get("notes") or "").strip()
     agenda_notes = (project.get("agenda_notes") or "").strip()
 
-    slug = _slugify(title)
-    folder_name = f"{slug}__{pid}"
-    proj_dir = root / folder_name
-    proj_dir.mkdir(parents=True, exist_ok=True)
+    proj_dir = _resolve_project_dir(base_dir, pid, title, lifecycle)
+    if proj_dir is None:
+        return None
 
     file_path = proj_dir / "@project_notes.md"
 
