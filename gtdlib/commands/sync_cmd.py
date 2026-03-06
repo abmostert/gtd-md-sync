@@ -24,6 +24,7 @@ from gtdlib.prompts.stalled_project_prompts import prompt_next_action_for_stalle
 from gtdlib.rules.contexts import normalize_context
 
 
+
 def _merge_completions(dst: dict[str, bool], src: dict[str, bool]) -> None:
     """
     Merge completion maps from multiple files.
@@ -35,6 +36,44 @@ def _merge_completions(dst: dict[str, bool], src: dict[str, bool]) -> None:
             dst[k] = True
         else:
             dst.setdefault(k, False)
+
+def _draft_action_already_exists(
+    actions: dict,
+    *,
+    project_id: str,
+    state: str,
+    title: str,
+    context,
+    due,
+    waiting_for,
+) -> bool:
+    """
+    Return True if an equivalent action already exists.
+
+    This makes repeated sync runs idempotent for draft actions that have not yet
+    been rewritten into @project_notes.md with real action IDs by build.
+    """
+    norm_title = (title or "").strip()
+    norm_context = context or None
+    norm_due = due or None
+    norm_waiting_for = waiting_for or None
+
+    for a in actions.values():
+        if (a.get("project") or "") != project_id:
+            continue
+        if (a.get("state") or "") != state:
+            continue
+        if (a.get("title") or "").strip() != norm_title:
+            continue
+        if (a.get("context") or None) != norm_context:
+            continue
+        if (a.get("due") or None) != norm_due:
+            continue
+        if (a.get("waiting_for") or None) != norm_waiting_for:
+            continue
+        return True
+
+    return False
 
 
 def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
@@ -192,6 +231,18 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
 
                 due_raw = (getattr(da, "due", "") or "").strip()
                 notes_raw = getattr(da, "notes", "") or ""
+                due = due_raw or None
+
+                if _draft_action_already_exists(
+                    actions,
+                    project_id=pid,
+                    state=state,
+                    title=title,
+                    context=context,
+                    due=due,
+                    waiting_for=waiting_for,
+                ):
+                    continue
 
                 aid = new_id("a")
                 actions[aid] = {
@@ -203,7 +254,7 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
                     "created": now,
                     "last_touched": now,
                     "waiting_since": now if state == "waiting" else None,
-                    "due": due_raw or None,
+                    "due": due,
                     "notes": str(notes_raw),
                 }
                 created_actions += 1
