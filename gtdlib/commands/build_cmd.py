@@ -95,7 +95,11 @@ def _build_projects(views_dir: Path, projects: dict, actions: dict) -> None:
     lines: list[str] = ["# Projects\n"]
 
     for pid, project in sorted(projects.items(), key=lambda t: (t[1].get("title", "") or "").lower()):
-        if project.get("state") != "active":
+        lifecycle = (project.get("lifecycle") or "live").strip().lower()
+        if lifecycle != "live":
+            continue
+
+        if (project.get("state") or "").strip().lower() != "active":
             continue
 
         counts = count_actions_by_state(actions, pid)
@@ -117,7 +121,13 @@ def _build_projects(views_dir: Path, projects: dict, actions: dict) -> None:
 def _build_someday(views_dir: Path, projects: dict, actions: dict) -> None:
     lines: list[str] = ["# Someday / Maybe\n"]
 
-    someday_projects = [(pid, p) for pid, p in projects.items() if p.get("state") == "someday"]
+        
+    someday_projects = [
+        (pid, p)
+        for pid, p in projects.items()
+        if (p.get("lifecycle") or "live").strip().lower() == "live"
+        and (p.get("state") or "").strip().lower() == "someday"
+    ]
     someday_actions = [(aid, a) for aid, a in actions.items() if a.get("state") == "someday"]
 
     if someday_projects:
