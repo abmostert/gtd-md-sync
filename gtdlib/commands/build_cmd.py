@@ -48,13 +48,35 @@ def _id_comment(item_id: str) -> str:
 # -------------------------
 
 def _build_next_actions(views_dir: Path, actions: dict, projects: dict) -> None:
-    # Group ACTIVE actions by context
+        
+    # Group ACTIVE non-agenda actions by context
     by_context: dict[str, list[tuple[str, dict]]] = defaultdict(list)
-
     for aid, action in actions.items():
-        if action.get("state") == "active":
-            ctx = action.get("context", "inbox")
-            by_context[ctx].append((aid, action))
+        if action.get("state") != "active":
+            continue
+
+        ctx = (action.get("context") or "inbox").strip()
+
+        # Agenda items belong only in agenda.md
+        if ctx.lower().startswith("agenda_"):
+            continue
+
+        pid = action.get("project")
+
+        # Standalone active actions are allowed.
+        if pid:
+            project = projects.get(pid)
+            if not project:
+                continue
+
+            lifecycle = (project.get("lifecycle") or "live").strip().lower()
+            if lifecycle != "live":
+                continue
+
+            if (project.get("state") or "").strip().lower() != "active":
+                continue
+
+        by_context[ctx].append((aid, action))
 
     lines: list[str] = ["# Next Actions\n"]
 
