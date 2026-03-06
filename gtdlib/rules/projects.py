@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Dict, Iterable, Tuple
 from gtdlib.rules.schema import ACTION_OPEN_STATES
+from gtdlib.rules.visibility import is_active_project, is_visible_next_action
 
 
 
@@ -14,34 +15,25 @@ def iter_actions_for_project(actions: dict, project_id: str) -> Iterable[dict]:
 def is_project_stalled(projects: dict, actions: dict, project_id: str) -> bool:
     """
     A project is "stalled" if:
-      - the project exists and is state == "active"
-      - it has NO open actions (open = active or waiting)
+      - the project exists
+      - the project is a live, active project
+      - it has NO visible next actions
+
+    Waiting-for items do not count as next actions.
+    Agenda items do not count as next actions.
     """
-    p = projects.get(project_id)
-    if not p:
+    project = projects.get(project_id)
+    if not project:
         return False
 
-    lifecycle = (p.get("lifecycle") or "live").strip().lower()
-    if lifecycle != "live":
-        return False
-    
-    if (p.get("state") or "").strip().lower() != "active":
+    if not is_active_project(project):
         return False
 
-    has_active = False
-    has_waiting = False
-
-    for a in actions.values():
-        if a.get("project") != project_id:
+    for action in actions.values():
+        if action.get("project") != project_id:
             continue
 
-        state = (a.get("state") or "").strip().lower()
-        if state == "active":
-            has_active = True
-        elif state == "waiting":
-            has_waiting = True
-
-        if has_active or has_waiting:
+        if is_visible_next_action(action, projects):
             return False
 
     return True
