@@ -162,7 +162,7 @@ def _build_waiting_for(views_dir: Path, actions: dict, projects: dict) -> None:
         if lifecycle != "live":
             continue
 
-        if not project.get("active", True):
+        if (project.get("state") or "active").strip().lower() != "active":
             continue
 
         items.append((aid, a))
