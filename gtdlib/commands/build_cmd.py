@@ -128,7 +128,29 @@ def _build_someday(views_dir: Path, projects: dict, actions: dict) -> None:
         if (p.get("lifecycle") or "live").strip().lower() == "live"
         and (p.get("state") or "").strip().lower() == "someday"
     ]
-    someday_actions = [(aid, a) for aid, a in actions.items() if a.get("state") == "someday"]
+    
+    someday_actions: list[tuple[str, dict]] = []
+
+    for aid, a in actions.items():
+        if a.get("state") != "someday":
+            continue
+
+        pid = a.get("project")
+
+        # Standalone someday actions are allowed.
+        if not pid:
+            someday_actions.append((aid, a))
+            continue
+
+        project = projects.get(pid)
+        if not project:
+            continue
+
+        lifecycle = (project.get("lifecycle") or "live").strip().lower()
+        if lifecycle != "live":
+            continue
+
+        someday_actions.append((aid, a))
 
     if someday_projects:
         lines.append("## Projects\n")
