@@ -100,23 +100,6 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
                 p["completed"] = now
                 completed_projects += 1
 
-    # Prompt for next actions on stalled active projects
-    if prompt_next:
-        contexts = get_contexts(base_dir)
-
-        for pid in projects.keys():
-            if is_project_stalled(projects, actions, pid):
-                proj = projects.get(pid, {})
-                title = (proj.get("title") or pid).strip()
-
-                prompt_next_action_for_stalled_project(
-                    base_dir=base_dir,
-                    project_id=pid,
-                    project_title=title,
-                    contexts=contexts,
-                    actions=actions,
-                )
-
 
     inbox_md = base_dir / "inbox" / "inbox.md"
     if inbox_md.exists():
@@ -230,7 +213,22 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
         if created_actions:
             print(f"Created {created_actions} action(s) from draft items in project notes.")
 
+        # Prompt for next actions on stalled active projects
+    if prompt_next:
+        contexts = get_contexts(base_dir)
 
+        for pid in projects.keys():
+            if is_project_stalled(projects, actions, pid):
+                proj = projects.get(pid, {})
+                title = (proj.get("title") or pid).strip()
+
+                prompt_next_action_for_stalled_project(
+                    base_dir=base_dir,
+                    project_id=pid,
+                    project_title=title,
+                    contexts=contexts,
+                    actions=actions,
+                )
     
     save_master(base_dir, master)
 
