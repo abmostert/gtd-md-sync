@@ -3,7 +3,12 @@ from __future__ import annotations
 
 from typing import Dict, Iterable, Tuple
 from gtdlib.rules.schema import ACTION_OPEN_STATES
-from gtdlib.rules.visibility import is_active_project, is_visible_next_action
+from gtdlib.rules.visibility import (
+    is_active_project,
+    is_visible_agenda_action,
+    is_visible_next_action,
+    is_visible_waiting_action,
+)
 
 
 
@@ -17,10 +22,15 @@ def is_project_stalled(projects: dict, actions: dict, project_id: str) -> bool:
     A project is "stalled" if:
       - the project exists
       - the project is a live, active project
-      - it has NO visible next actions
+      - it has NO visible forward edge
 
-    Waiting-for items do not count as next actions.
-    Agenda items do not count as next actions.
+    A visible forward edge can be:
+      - a visible next action
+      - a visible waiting-for action
+      - a visible agenda action
+
+    In other words, a project is stalled only when the system contains no
+    currently defined way for it to move forward.
     """
     project = projects.get(project_id)
     if not project:
@@ -34,6 +44,12 @@ def is_project_stalled(projects: dict, actions: dict, project_id: str) -> bool:
             continue
 
         if is_visible_next_action(action, projects):
+            return False
+
+        if is_visible_waiting_action(action, projects):
+            return False
+
+        if is_visible_agenda_action(action, projects):
             return False
 
     return True
