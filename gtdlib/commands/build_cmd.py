@@ -228,13 +228,11 @@ def _build_waiting_for(views_dir: Path, actions: dict, projects: dict) -> None:
 def _build_agenda(views_dir: Path, actions: dict, projects: dict) -> None:
     lines: list[str] = ["# Agenda", ""]
 
-    agenda_items: list[tuple[str, dict]] = []
-    for aid, a in actions.items():
-        if a.get("state") != "active":
-            continue
-        ctx = (a.get("context") or "").strip()
-        if ctx.startswith("agenda_"):
-            agenda_items.append((aid, a))
+    agenda_items: list[tuple[str, dict]] = [
+        (aid, a)
+        for aid, a in actions.items()
+        if is_visible_agenda_action(a, projects)
+    ]
 
     if not agenda_items:
         lines.append("_No agenda items._")
