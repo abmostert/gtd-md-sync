@@ -105,11 +105,7 @@ def _build_projects(views_dir: Path, projects: dict, actions: dict) -> None:
     lines: list[str] = ["# Projects\n"]
 
     for pid, project in sorted(projects.items(), key=lambda t: (t[1].get("title", "") or "").lower()):
-        lifecycle = (project.get("lifecycle") or "live").strip().lower()
-        if lifecycle != "live":
-            continue
-
-        if (project.get("state") or "").strip().lower() != "active":
+        if not is_active_project(project):
             continue
 
         counts = count_actions_by_state(actions, pid)
