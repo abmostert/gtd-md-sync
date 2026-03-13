@@ -79,18 +79,19 @@ def _apply_existing_action_edit(actions: dict, action_edit) -> bool:
     """
     Apply a section-based edit for an existing action parsed from @project_notes.md.
 
-    Returns True if an action was found and updated, else False.
+    Returns True only if an action was actually changed.
     """
     aid = getattr(action_edit, "action_id", None)
     if not aid or aid not in actions:
         return False
 
     action = actions[aid]
+
     # Never resurrect completed actions from project notes.
     # Completion from generated views should win over stale placement in @project_notes.md.
     if (action.get("state") or "").strip().lower() == "completed":
         return False
-    
+
     section = (getattr(action_edit, "section", "") or "").strip().lower()
     title = (getattr(action_edit, "title", "") or "").strip()
     due = (getattr(action_edit, "due", "") or "").strip() or None
@@ -98,44 +99,62 @@ def _apply_existing_action_edit(actions: dict, action_edit) -> bool:
     context_raw = (getattr(action_edit, "context", "") or "").strip()
     waiting_for_raw = (getattr(action_edit, "waiting_for", "") or "").strip()
 
-    if title:
-        action["title"] = title
+    changed = False
 
-    action["due"] = due
-    if notes is not None:
+    def set_if_different(key: str, new_value):
+        nonlocal changed
+        old_value = action.get(key)
+        if old_value != new_value:
+            action[key] = new_value
+            changed = True
+
+    if title and action.get("title") != title:
+        action["title"] = title
+        changed = True
+
+    set_if_different("due", due)
+
+    if notes is not None and action.get("notes") != str(notes):
         action["notes"] = str(notes)
+        changed = True
 
     if section == "active":
-        action["state"] = "active"
-        action["waiting_for"] = None
-        action["context"] = normalize_context(context_raw) if context_raw else "inbox"
-        action["waiting_since"] = None
+        new_state = "active"
+        new_waiting_for = None
+        new_context = normalize_context(context_raw) if context_raw else "inbox"
+        new_waiting_since = None
 
     elif section == "agenda":
-        action["state"] = "active"
-        action["waiting_for"] = None
+        new_state = "active"
+        new_waiting_for = None
         who = normalize_context(context_raw) if context_raw else "unspecified"
-        action["context"] = f"agenda_{who}"
-        action["waiting_since"] = None
+        new_context = f"agenda_{who}"
+        new_waiting_since = None
 
     elif section == "someday":
-        action["state"] = "someday"
-        action["waiting_for"] = None
-        action["context"] = normalize_context(context_raw) if context_raw else "inbox"
-        action["waiting_since"] = None
+        new_state = "someday"
+        new_waiting_for = None
+        new_context = normalize_context(context_raw) if context_raw else "inbox"
+        new_waiting_since = None
 
     elif section == "waiting":
-        action["state"] = "waiting"
-        action["context"] = None
-        action["waiting_for"] = waiting_for_raw or "unspecified"
-        if not action.get("waiting_since"):
-            action["waiting_since"] = utc_now_iso()
+        new_state = "waiting"
+        new_context = None
+        new_waiting_for = waiting_for_raw or "unspecified"
+        new_waiting_since = action.get("waiting_since") or utc_now_iso()
 
     else:
         return False
 
-    action["last_touched"] = utc_now_iso()
-    return True
+    set_if_different("state", new_state)
+    set_if_different("context", new_context)
+    set_if_different("waiting_for", new_waiting_for)
+    set_if_different("waiting_since", new_waiting_since)
+
+    if changed:
+        action["last_touched"] = utc_now_iso()
+
+    return changed
 
 
 def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
