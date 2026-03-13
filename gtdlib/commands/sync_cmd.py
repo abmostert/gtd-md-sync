@@ -291,8 +291,6 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
                 aid = getattr(ea, "action_id", None)
                 section = getattr(ea, "section", None)
 
-                print(f"DEBUG existing edit: project={pid} action={aid} section={section}")
-                
                 if _apply_existing_action_edit(actions, ea):
                     updated_existing_actions += 1
 
