@@ -23,7 +23,12 @@ from gtdlib.parsing.project_notes import parse_project_notes
 from gtdlib.prompts.stalled_project_prompts import prompt_next_action_for_stalled_project
 from gtdlib.rules.contexts import normalize_context
 
+import re
 
+_ID_COMMENT_RE = re.compile(r"<!--\s*id:(?P<id>[A-Za-z0-9_:-]+)\s*-->")
+
+def _strip_id_comments(text: str) -> str:
+    return _ID_COMMENT_RE.sub("", text or "").strip()
 
 def _merge_completions(dst: dict[str, bool], src: dict[str, bool]) -> None:
     """
@@ -93,7 +98,7 @@ def _apply_existing_action_edit(actions: dict, action_edit) -> bool:
         return False
 
     section = (getattr(action_edit, "section", "") or "").strip().lower()
-    title = (getattr(action_edit, "title", "") or "").strip()
+    title = _strip_id_comments((getattr(action_edit, "title", "") or "").strip())
     due = (getattr(action_edit, "due", "") or "").strip() or None
     notes = getattr(action_edit, "notes", None)
     context_raw = (getattr(action_edit, "context", "") or "").strip()
