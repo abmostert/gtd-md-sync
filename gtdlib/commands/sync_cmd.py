@@ -86,6 +86,11 @@ def _apply_existing_action_edit(actions: dict, action_edit) -> bool:
         return False
 
     action = actions[aid]
+    # Never resurrect completed actions from project notes.
+    # Completion from generated views should win over stale placement in @project_notes.md.
+    if (action.get("state") or "").strip().lower() == "completed":
+        return False
+    
     section = (getattr(action_edit, "section", "") or "").strip().lower()
     title = (getattr(action_edit, "title", "") or "").strip()
     due = (getattr(action_edit, "due", "") or "").strip() or None
@@ -163,15 +168,18 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
     completed_actions = 0
     completed_projects = 0
 
-    # Scanning of project notes
+    # Scan project notes for checkbox completions as well.
     projects_dir = base_dir / "projects"
     if projects_dir.exists():
         for folder in projects_dir.iterdir():
             if not folder.is_dir():
                 continue
-            pn = folder / "project_notes.md"
+            pn = folder / "@project_notes.md"
             if pn.exists():
-                _merge_completions(completion_map, extract_completions_from_markdown(fp.read_text(encoding="utf-8")))
+                _merge_completions(
+                    completion_map,
+                    extract_completions_from_markdown(pn.read_text(encoding="utf-8")),
+                )
   
 
     # Apply completions
