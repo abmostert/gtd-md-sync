@@ -75,6 +75,63 @@ def _draft_action_already_exists(
 
     return False
 
+def _apply_existing_action_edit(actions: dict, action_edit) -> bool:
+    """
+    Apply a section-based edit for an existing action parsed from @project_notes.md.
+
+    Returns True if an action was found and updated, else False.
+    """
+    aid = getattr(action_edit, "action_id", None)
+    if not aid or aid not in actions:
+        return False
+
+    action = actions[aid]
+    section = (getattr(action_edit, "section", "") or "").strip().lower()
+    title = (getattr(action_edit, "title", "") or "").strip()
+    due = (getattr(action_edit, "due", "") or "").strip() or None
+    notes = getattr(action_edit, "notes", None)
+    context_raw = (getattr(action_edit, "context", "") or "").strip()
+    waiting_for_raw = (getattr(action_edit, "waiting_for", "") or "").strip()
+
+    if title:
+        action["title"] = title
+
+    action["due"] = due
+    if notes is not None:
+        action["notes"] = str(notes)
+
+    if section == "active":
+        action["state"] = "active"
+        action["waiting_for"] = None
+        action["context"] = normalize_context(context_raw) if context_raw else "inbox"
+        action["waiting_since"] = None
+
+    elif section == "agenda":
+        action["state"] = "active"
+        action["waiting_for"] = None
+        who = normalize_context(context_raw) if context_raw else "unspecified"
+        action["context"] = f"agenda_{who}"
+        action["waiting_since"] = None
+
+    elif section == "someday":
+        action["state"] = "someday"
+        action["waiting_for"] = None
+        action["context"] = normalize_context(context_raw) if context_raw else "inbox"
+        action["waiting_since"] = None
+
+    elif section == "waiting":
+        action["state"] = "waiting"
+        action["context"] = None
+        action["waiting_for"] = waiting_for_raw or "unspecified"
+        if not action.get("waiting_since"):
+            action["waiting_since"] = utc_now_iso()
+
+    else:
+        return False
+
+    action["last_touched"] = utc_now_iso()
+    return True
+
 
 def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
     """
@@ -162,6 +219,7 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
     if project_notes_root.exists():
         updated_projects = 0
         created_actions = 0
+        updated_existing_actions = 0
 
         for fp in project_notes_root.rglob("@project_notes.md"):
             try:
@@ -199,6 +257,13 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
                 projects[pid] = p
                 updated_projects += 1
 
+            # ---- EXISTING actions moved between sections / edited in project notes ----
+            updated_existing_actions = 0
+            for ea in getattr(edits, "existing_actions", []) or []:
+                if _apply_existing_action_edit(actions, ea):
+                    updated_existing_actions += 1
+
+            
             # ---- NEW draft actions (no id marker in the file) ----
             # parse_project_notes() should provide edits.draft_actions: list[DraftAction]
             for da in getattr(edits, "draft_actions", []) or []:
@@ -269,6 +334,8 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
 
         if updated_projects:
             print(f"Imported edits from {updated_projects} project note file(s).")
+        if updated_existing_actions:
+            print(f"Updated {updated_existing_actions} existing action(s) from project notes.")
         if created_actions:
             print(f"Created {created_actions} action(s) from draft items in project notes.")
 
