@@ -19,6 +19,15 @@ class DraftAction:
     notes: Optional[str] = None
     waiting_for: Optional[str] = None
 
+@dataclass
+class ExistingActionEdit:
+    action_id: str
+    section: str          # "active" | "waiting" | "someday" | "agenda"
+    title: str
+    context: Optional[str] = None
+    due: Optional[str] = None
+    notes: Optional[str] = None
+    waiting_for: Optional[str] = None
 
 @dataclass
 class ProjectNotesEdits:
@@ -27,7 +36,7 @@ class ProjectNotesEdits:
     notes: str
     agenda_notes: str
     draft_actions: list[DraftAction]
-
+    existing_actions: list[ExistingActionEdit]
 
 def _normalize_heading(s: str) -> str:
     return " ".join((s or "").strip().lower().split())
@@ -110,6 +119,7 @@ def parse_project_notes(text: str) -> Optional[ProjectNotesEdits]:
 
     # Parse draft actions from the three action sections
     draft_actions: list[DraftAction] = []
+    existing_actions: list[ExistingActionEdit] = []
 
     for h2_name, block_lines in sections.items():
         sec = _map_section(h2_name)
@@ -128,11 +138,6 @@ def parse_project_notes(text: str) -> Optional[ProjectNotesEdits]:
 
             text_part = mcb.group("text") or ""
 
-            # If this line already has an id comment, it's an existing action; skip.
-            if ID_COMMENT_RE.search(line):
-                i += 1
-                continue
-
             # Title handling: allow optional "draft:" prefix
             title = text_part.strip()
             if title.lower().startswith("draft:"):
@@ -142,7 +147,15 @@ def parse_project_notes(text: str) -> Optional[ProjectNotesEdits]:
                 i += 1
                 continue
 
-            da = DraftAction(section=sec, title=title)
+            existing_id_match = ID_COMMENT_RE.search(line)
+            if existing_id_match:
+                action_obj = ExistingActionEdit(
+                    action_id=existing_id_match.group("id").strip(),
+                    section=sec,
+                    title=title,
+                )
+            else:
+                action_obj = DraftAction(section=sec, title=title)
 
             # Consume indented meta lines until next checkbox or next header-ish line
             j = i + 1
@@ -160,24 +173,30 @@ def parse_project_notes(text: str) -> Optional[ProjectNotesEdits]:
                     key = (mm.group("key") or "").strip().lower()
                     val = (mm.group("val") or "").strip()
                     if key == "context":
-                        da.context = val or None
+                        action_obj.context = val or None
                     elif key == "due":
-                        da.due = val or None
+                        action_obj.due = val or None
                     elif key in ("waiting_for", "waiting"):
-                        da.waiting_for = val or None
+                        action_obj.waiting_for = val or None
                     elif key == "notes":
-                        da.notes = val or None
+                        action_obj.notes = val or None
 
                 j += 1
 
-            draft_actions.append(da)
+            if isinstance(action_obj, ExistingActionEdit):
+                existing_actions.append(action_obj)
+            else:
+                draft_actions.append(action_obj)
+
             i = j  # continue after metadata block
 
+    
     return ProjectNotesEdits(
         project_id=pid,
         outcome=outcome,
         notes=notes,
         agenda_notes=agenda,
         draft_actions=draft_actions,
+        existing_actions=existing_actions,
     )
 
