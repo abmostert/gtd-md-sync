@@ -45,6 +45,8 @@ def _normalize_heading(s: str) -> str:
 def _strip_trailing_whitespace_lines(text: str) -> str:
     return (text or "").strip("\n").rstrip()
 
+def _strip_id_comments(text: str) -> str:
+    return ID_COMMENT_RE.sub("", text or "").strip()
 
 def _map_section(h2: str) -> Optional[str]:
     """
@@ -138,8 +140,8 @@ def parse_project_notes(text: str) -> Optional[ProjectNotesEdits]:
 
             text_part = mcb.group("text") or ""
 
-            # Title handling: allow optional "draft:" prefix
-            title = text_part.strip()
+            # Title handling: strip any embedded id comments, then allow optional "draft:" prefix
+            title = _strip_id_comments(text_part)
             if title.lower().startswith("draft:"):
                 title = title[len("draft:"):].strip()
 
