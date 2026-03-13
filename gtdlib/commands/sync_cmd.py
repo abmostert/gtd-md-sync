@@ -288,8 +288,8 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
             updated_existing_actions = 0
             for ea in getattr(edits, "existing_actions", []) or []:
 
-                aid = getattr(ea, "action_id", None)
-                section = getattr(ea, "section", None)
+                #aid = getattr(ea, "action_id", None)
+                #section = getattr(ea, "section", None)
 
                 if _apply_existing_action_edit(actions, ea):
                     updated_existing_actions += 1
