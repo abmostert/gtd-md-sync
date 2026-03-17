@@ -229,8 +229,15 @@ def _build_focus(views_dir: Path, actions: dict, projects: dict, base_dir: Path)
                 if pt:
                     proj_label = f" [{pt}]"
 
+            title = action.get("title", "")
+            prefix = ""
+            if action.get("due"):
+                prefix += f"(due {action['due']}) "
+            if proj_label:
+                prefix += f"{proj_label.strip()} "
+
             lines.append(
-                f"- [ ] {action.get('title','')}{proj_label}{due} {{score: {score:.2f}}} {_id_comment(aid)}"
+                f"- [ ] {prefix}{title} {{score: {score:.2f}}} {_id_comment(aid)}"
             )
         lines.append("")
 
