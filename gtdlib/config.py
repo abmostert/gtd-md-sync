@@ -1,6 +1,6 @@
+from __future__ import annotations
 from gtdlib.store import ensure_config
 from gtdlib.rules.contexts import normalize_context
-from __future__ import annotations
 
 DEFAULT_FOCUS_CONFIG = {
     "enabled": True,
