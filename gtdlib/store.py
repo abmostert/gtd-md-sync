@@ -33,6 +33,20 @@ DEFAULT_CONTEXTS = [
     "agenda",
 ]
 
+DEFAULT_FOCUS_CONFIG = {
+    "enabled": True,
+    "max_items": 20,
+    "weights": {
+        "action_due": 40.0,
+        "action_overdue_slope": 3.0,
+        "project_due": 20.0,
+        "project_overdue_slope": 2.0,
+        "age": 6.0,
+        "tension": 10.0,
+        "overdue_bonus": 15.0,
+    },
+}
+
 def ensure_master_schema(master: dict) -> tuple[dict, bool]:
     """
     Idempotently upgrade master dict in-memory to the latest schema.
@@ -141,7 +155,10 @@ def ensure_config(base_dir: Path) -> dict:
     """
     cfg_path = base_dir / CONFIG_FILENAME
     if not cfg_path.exists():
-        cfg = {"contexts": list(DEFAULT_CONTEXTS)}
+        cfg = {
+            "contexts": list(DEFAULT_CONTEXTS), 
+            "focus": json.loads(json.dumps(DEFAULT_FOCUS_CONFIG))  
+        }
         save_config(base_dir, cfg)
         return cfg
     return load_config(base_dir)
