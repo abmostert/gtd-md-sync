@@ -1,20 +1,7 @@
 from __future__ import annotations
-from gtdlib.store import ensure_config
+from gtdlib.store import ensure_config, DEFAULT_FOCUS_CONFIG
 from gtdlib.rules.contexts import normalize_context
 
-DEFAULT_FOCUS_CONFIG = {
-    "enabled": True,
-    "max_items": 12,
-    "weights": {
-        "action_due": 40.0,
-        "action_overdue_slope": 3.0,
-        "project_due": 20.0,
-        "project_overdue_slope": 2.0,
-        "age": 6.0,
-        "tension": 10.0,
-        "overdue_bonus": 15.0,
-    },
-}
 
 def get_contexts(base_dir):
 
