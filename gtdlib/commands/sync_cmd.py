@@ -176,6 +176,7 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
 
     # Read relevant view files
     view_files = [
+        views_dir / "focus.md",
         views_dir / "next_actions.md",
         views_dir / "projects.md",
         views_dir / "someday.md",
