@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 from collections import defaultdict
-
 from gtdlib.store import load_master, VIEWS_DIRNAME
 from gtdlib.rules.projects import (
     count_actions_by_state,
@@ -17,6 +16,10 @@ from gtdlib.rules.visibility import (
     is_visible_someday_action,
     is_visible_waiting_action,
 )
+import math
+from datetime import date
+from gtdlib.config import get_focus_config
+
 
 def cmd_build(base_dir: Path) -> int:
     """
@@ -36,6 +39,7 @@ def cmd_build(base_dir: Path) -> int:
     projects = master.get("projects", {})
 
     _build_next_actions(views_dir, actions, projects)
+    _build_focus(views_dir, actions, projects, base_dir)
     _build_projects(views_dir, projects, actions)
     _build_someday(views_dir, projects, actions)
     _build_waiting_for(views_dir, actions, projects)
@@ -50,23 +54,98 @@ def cmd_build(base_dir: Path) -> int:
 def _id_comment(item_id: str) -> str:
     return f"<!-- id:{item_id} -->"
 
+def _parse_iso_date(s: str | None) -> date | None:
+    if not s:
+        return None
+    try:
+        return date.fromisoformat(str(s).strip())
+    except Exception:
+        return None
+
+
+def _days_until(target: date | None, today: date) -> int | None:
+    if target is None:
+        return None
+    return (target - today).days
+
+
+def _action_age_days(action: dict, today: date) -> int:
+    created = _parse_iso_date((action.get("created") or "")[:10])
+    last_touched = _parse_iso_date((action.get("last_touched") or "")[:10])
+
+    basis = created or last_touched
+    if basis is None:
+        return 0
+
+    age = (today - basis).days
+    return max(age, 0)
+
+
+def _score_next_action(action: dict, project: dict | None, today: date, weights: dict) -> float:
+    action_due = _parse_iso_date(action.get("due"))
+    project_due = _parse_iso_date(project.get("due")) if project else None
+
+    d_a = _days_until(action_due, today)
+    d_p = _days_until(project_due, today)
+    age_days = _action_age_days(action, today)
+
+    score = 0.0
+
+    # Action due urgency
+    if d_a is not None:
+        if d_a >= 0:
+            score += weights["action_due"] / (d_a + 1.0)
+        else:
+            score += weights["action_due"] + weights["action_overdue_slope"] * abs(d_a)
+
+    # Project due urgency
+    if d_p is not None:
+        if d_p >= 0:
+            score += weights["project_due"] / (d_p + 1.0)
+        else:
+            score += weights["project_due"] + weights["project_overdue_slope"] * abs(d_p)
+
+    # Age / stagnation pressure
+    score += weights["age"] * math.log(age_days + 1.0)
+
+    # Action/project tension
+    if d_a is not None and d_p is not None and d_p > d_a:
+        score += weights["tension"] * ((d_p - d_a) / (d_p + 1.0))
+
+    # Explicit overdue bonus
+    if d_a is not None and d_a < 0:
+        score += weights["overdue_bonus"]
+
+    return score
+
+
 
 # -------------------------
 # View builders
 # -------------------------
 
+def _collect_visible_next_actions(actions: dict, projects: dict) -> list[tuple[str, dict]]:
+    return [
+        (aid, action)
+        for aid, action in actions.items()
+        if is_visible_next_action(action, projects)
+    ]
+
+
 def _build_next_actions(views_dir: Path, actions: dict, projects: dict) -> None:
-        
+    lines: list[str] = ["# Next Actions", ""]
+
+    items = _collect_visible_next_actions(actions, projects)
+
+    if not items:
+        lines.append("_No next actions._")
+        (views_dir / "next_actions.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return
+
     by_context: dict[str, list[tuple[str, dict]]] = defaultdict(list)
-
-    for aid, action in actions.items():
-        if not is_visible_next_action(action, projects):
-            continue
-
+    for aid, action in items:
         ctx = (action.get("context") or "inbox").strip()
         by_context[ctx].append((aid, action))
-
-    lines: list[str] = ["# Next Actions\n"]
 
     for context in sorted(by_context):
         lines.append(f"## @{context}\n")
@@ -94,6 +173,68 @@ def _build_next_actions(views_dir: Path, actions: dict, projects: dict) -> None:
         encoding="utf-8",
     )
 
+def _build_focus(views_dir: Path, actions: dict, projects: dict, base_dir: Path) -> None:
+    focus_cfg = get_focus_config(base_dir)
+    if not focus_cfg.get("enabled", True):
+        return
+
+    lines: list[str] = ["# Focus", ""]
+
+    items = _collect_visible_next_actions(actions, projects)
+    if not items:
+        lines.append("_No focused next actions._")
+        (views_dir / "focus.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return
+
+    today = date.today()
+    scored: list[tuple[str, dict, float]] = []
+
+    for aid, action in items:
+        pid = action.get("project")
+        project = projects.get(pid) if pid else None
+        score = _score_next_action(action, project, today, focus_cfg["weights"])
+        scored.append((aid, action, score))
+
+    scored.sort(
+        key=lambda t: (
+            -t[2],
+            (t[1].get("due") or "9999-12-31"),
+            (t[1].get("title") or "").lower(),
+        )
+    )
+
+    top_n = focus_cfg["max_items"]
+    shortlisted = scored[:top_n]
+
+    by_context: dict[str, list[tuple[str, dict, float]]] = defaultdict(list)
+    for aid, action, score in shortlisted:
+        ctx = (action.get("context") or "inbox").strip()
+        by_context[ctx].append((aid, action, score))
+
+    for ctx in sorted(by_context.keys(), key=str.lower):
+        lines.append(f"## {ctx}")
+        lines.append("")
+
+        items_in_context = sorted(
+            by_context[ctx],
+            key=lambda t: (-t[2], (t[1].get("due") or "9999-12-31"), (t[1].get("title") or "").lower()),
+        )
+
+        for aid, action, score in items_in_context:
+            due = f" (due {action['due']})" if action.get("due") else ""
+            proj_label = ""
+            pid = action.get("project")
+            if pid and pid in projects:
+                pt = (projects[pid].get("title") or "").strip()
+                if pt:
+                    proj_label = f" [{pt}]"
+
+            lines.append(
+                f"- [ ] {action.get('title','')}{proj_label}{due} {{score: {score:.2f}}} {_id_comment(aid)}"
+            )
+        lines.append("")
+
+    (views_dir / "focus.md").write_text("\n".join(lines).strip() + "\n", encoding="utf-8")
 
 def _build_projects(views_dir: Path, projects: dict, actions: dict) -> None:
     """
