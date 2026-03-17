@@ -25,7 +25,7 @@ def get_contexts(base_dir):
     return sorted(set(contexts))
 
 def get_focus_config(base_dir):
-    cfg = load_config(base_dir) or {}
+    cfg = ensure_config(base_dir) or {}
     focus = cfg.get("focus") or {}
 
     result = {
