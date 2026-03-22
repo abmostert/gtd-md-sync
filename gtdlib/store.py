@@ -35,7 +35,9 @@ DEFAULT_CONTEXTS = [
 
 DEFAULT_FOCUS_CONFIG = {
     "enabled": True,
-    "max_items": 20,
+    "context_cap": 5,
+    "include_overdue": True,
+    "include_due_today": True,
     "weights": {
         "action_due": 40.0,
         "action_overdue_slope": 3.0,
@@ -161,6 +163,18 @@ def ensure_config(base_dir: Path) -> dict:
         }
         save_config(base_dir, cfg)
         return cfg
+    if "context_cap" not in focus:
+        focus["context_cap"] = DEFAULT_FOCUS_CONFIG["context_cap"]
+        changed = True
+
+    if "include_overdue" not in focus:
+        focus["include_overdue"] = DEFAULT_FOCUS_CONFIG["include_overdue"]
+        changed = True
+
+    if "include_due_today" not in focus:
+        focus["include_due_today"] = DEFAULT_FOCUS_CONFIG["include_due_today"]
+        changed = True
+    
     return load_config(base_dir)
 
 
