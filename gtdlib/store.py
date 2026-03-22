@@ -152,29 +152,59 @@ def save_config(base_dir: Path, cfg: dict) -> None:
 
 def ensure_config(base_dir: Path) -> dict:
     """
-    Ensure config.json exists. If not, create it with defaults.
+    Ensure config.json exists and contains required defaults.
     Returns the loaded config.
     """
     cfg_path = base_dir / CONFIG_FILENAME
+
     if not cfg_path.exists():
         cfg = {
-            "contexts": list(DEFAULT_CONTEXTS), 
-            "focus": json.loads(json.dumps(DEFAULT_FOCUS_CONFIG))  
+            "contexts": list(DEFAULT_CONTEXTS),
+            "focus": json.loads(json.dumps(DEFAULT_FOCUS_CONFIG)),
         }
         save_config(base_dir, cfg)
         return cfg
-    if "context_cap" not in focus:
-        focus["context_cap"] = DEFAULT_FOCUS_CONFIG["context_cap"]
+
+    cfg = load_config(base_dir)
+    changed = False
+
+    if "contexts" not in cfg:
+        cfg["contexts"] = list(DEFAULT_CONTEXTS)
         changed = True
 
-    if "include_overdue" not in focus:
-        focus["include_overdue"] = DEFAULT_FOCUS_CONFIG["include_overdue"]
+    if "focus" not in cfg or not isinstance(cfg["focus"], dict):
+        cfg["focus"] = json.loads(json.dumps(DEFAULT_FOCUS_CONFIG))
         changed = True
+    else:
+        focus = cfg["focus"]
 
-    if "include_due_today" not in focus:
-        focus["include_due_today"] = DEFAULT_FOCUS_CONFIG["include_due_today"]
-        changed = True
-    
-    return load_config(base_dir)
+        if "enabled" not in focus:
+            focus["enabled"] = DEFAULT_FOCUS_CONFIG["enabled"]
+            changed = True
 
+        if "context_cap" not in focus:
+            focus["context_cap"] = DEFAULT_FOCUS_CONFIG["context_cap"]
+            changed = True
+
+        if "include_overdue" not in focus:
+            focus["include_overdue"] = DEFAULT_FOCUS_CONFIG["include_overdue"]
+            changed = True
+
+        if "include_due_today" not in focus:
+            focus["include_due_today"] = DEFAULT_FOCUS_CONFIG["include_due_today"]
+            changed = True
+
+        if "weights" not in focus or not isinstance(focus["weights"], dict):
+            focus["weights"] = json.loads(json.dumps(DEFAULT_FOCUS_CONFIG["weights"]))
+            changed = True
+        else:
+            for k, v in DEFAULT_FOCUS_CONFIG["weights"].items():
+                if k not in focus["weights"]:
+                    focus["weights"][k] = v
+                    changed = True
+
+    if changed:
+        save_config(base_dir, cfg)
+
+    return cfg
 
