@@ -80,6 +80,29 @@ def _action_age_days(action: dict, today: date) -> int:
     age = (today - basis).days
     return max(age, 0)
 
+def _due_bucket(action: dict, today: date) -> tuple[int, int]:
+    """
+    Return a sorting bucket for focus rendering.
+
+    Lower bucket number = higher urgency.
+    Buckets:
+      0 = overdue
+      1 = due today
+      2 = everything else
+
+    Second value is days until due, or a large fallback.
+    """
+    due_dt = _parse_iso_date(action.get("due"))
+    d = _days_until(due_dt, today)
+
+    if d is None:
+        return (2, 999999)
+    if d < 0:
+        return (0, d)
+    if d == 0:
+        return (1, d)
+    return (2, d)
+
 
 def _score_next_action(action: dict, project: dict | None, today: date, weights: dict) -> float:
     action_due = _parse_iso_date(action.get("due"))
@@ -195,7 +218,37 @@ def _build_focus(views_dir: Path, actions: dict, projects: dict, base_dir: Path)
         score = _score_next_action(action, project, today, focus_cfg["weights"])
         scored.append((aid, action, score))
 
-    scored.sort(
+    context_cap = focus_cfg["context_cap"]
+    include_overdue = focus_cfg["include_overdue"]
+    include_due_today = focus_cfg["include_due_today"]
+
+    # Split into mandatory vs remaining
+    mandatory: list[tuple[str, dict, float]] = []
+    remaining: list[tuple[str, dict, float]] = []
+
+    for aid, action, score in scored:
+        due_dt = _parse_iso_date(action.get("due"))
+        d = _days_until(due_dt, today)
+
+        is_overdue = d is not None and d < 0
+        is_due_today = d is not None and d == 0
+
+        if (include_overdue and is_overdue) or (include_due_today and is_due_today):
+            mandatory.append((aid, action, score))
+        else:
+            remaining.append((aid, action, score))
+
+    # Group mandatory items by context
+    by_context: dict[str, list[tuple[str, dict, float]]] = defaultdict(list)
+    selected_ids: set[str] = set()
+
+    for aid, action, score in mandatory:
+        ctx = (action.get("context") or "inbox").strip()
+        by_context[ctx].append((aid, action, score))
+        selected_ids.add(aid)
+
+    # Sort remaining items by score desc, then due, then title
+    remaining.sort(
         key=lambda t: (
             -t[2],
             (t[1].get("due") or "9999-12-31"),
@@ -203,13 +256,24 @@ def _build_focus(views_dir: Path, actions: dict, projects: dict, base_dir: Path)
         )
     )
 
-    top_n = focus_cfg["max_items"]
-    shortlisted = scored[:top_n]
+    # Per-context fill up to cap, but mandatory items can exceed the cap
+    for aid, action, score in remaining:
+        if aid in selected_ids:
+            continue
 
-    by_context: dict[str, list[tuple[str, dict, float]]] = defaultdict(list)
-    for aid, action, score in shortlisted:
         ctx = (action.get("context") or "inbox").strip()
+        current_count = len(by_context.get(ctx, []))
+
+        if current_count >= context_cap:
+            continue
+
         by_context[ctx].append((aid, action, score))
+        selected_ids.add(aid)
+
+    if not by_context:
+        lines.append("_No focused next actions._")
+        (views_dir / "focus.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return
 
     for ctx in sorted(by_context.keys(), key=str.lower):
         lines.append(f"## {ctx}")
@@ -217,31 +281,31 @@ def _build_focus(views_dir: Path, actions: dict, projects: dict, base_dir: Path)
 
         items_in_context = sorted(
             by_context[ctx],
-            key=lambda t: (-t[2], (t[1].get("due") or "9999-12-31"), (t[1].get("title") or "").lower()),
+            key=lambda t: (
+                _due_bucket(t[1], today),
+                -t[2],
+                (t[1].get("title") or "").lower(),
+            ),
         )
 
         for aid, action, score in items_in_context:
-            due = f" (due {action['due']})" if action.get("due") else ""
-            proj_label = ""
+            title = action.get("title", "")
+            due_prefix = f"(due {action['due']}) " if action.get("due") else ""
+
+            proj_prefix = ""
             pid = action.get("project")
             if pid and pid in projects:
                 pt = (projects[pid].get("title") or "").strip()
                 if pt:
-                    proj_label = f" [{pt}]"
-
-            title = action.get("title", "")
-            prefix = ""
-            if action.get("due"):
-                prefix += f"(due {action['due']}) "
-            if proj_label:
-                prefix += f"{proj_label.strip()} "
+                    proj_prefix = f"[{pt}] "
 
             lines.append(
-                f"- [ ] {prefix}{title} {{score: {score:.2f}}} {_id_comment(aid)}"
+                f"- [ ] {due_prefix}{proj_prefix}{title} {{score: {score:.2f}}} {_id_comment(aid)}"
             )
         lines.append("")
 
     (views_dir / "focus.md").write_text("\n".join(lines).strip() + "\n", encoding="utf-8")
+    
 
 def _build_projects(views_dir: Path, projects: dict, actions: dict) -> None:
     """
