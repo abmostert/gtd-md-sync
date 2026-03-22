@@ -17,7 +17,9 @@ def get_focus_config(base_dir):
 
     result = {
         "enabled": focus.get("enabled", DEFAULT_FOCUS_CONFIG["enabled"]),
-        "max_items": focus.get("max_items", DEFAULT_FOCUS_CONFIG["max_items"]),
+        "context_cap": focus.get("context_cap", DEFAULT_FOCUS_CONFIG["context_cap"]),
+        "include_overdue": focus.get("include_overdue", DEFAULT_FOCUS_CONFIG["include_overdue"]),
+        "include_due_today": focus.get("include_due_today", DEFAULT_FOCUS_CONFIG["include_due_today"]),
         "weights": dict(DEFAULT_FOCUS_CONFIG["weights"]),
     }
 
@@ -26,8 +28,12 @@ def get_focus_config(base_dir):
         if k in result["weights"]:
             result["weights"][k] = float(v)
 
-    result["max_items"] = int(result["max_items"])
-    if result["max_items"] < 1:
-        result["max_items"] = 1
+    result["context_cap"] = int(result["context_cap"])
+    if result["context_cap"] < 1:
+        result["context_cap"] = 1
+
+    result["enabled"] = bool(result["enabled"])
+    result["include_overdue"] = bool(result["include_overdue"])
+    result["include_due_today"] = bool(result["include_due_today"])
 
     return result
