@@ -132,7 +132,9 @@ def _score_next_action(action: dict, project: dict | None, today: date, weights:
     score += weights["age"] * math.log(age_days + 1.0)
 
     # Action/project tension
-    if d_a is not None and d_p is not None and d_p > d_a:
+    # Only apply when the project due date is in the future.
+    # If the project is due today or overdue, project urgency already captures that.
+    if d_a is not None and d_p is not None and d_p > 0 and d_p > d_a:
         score += weights["tension"] * ((d_p - d_a) / (d_p + 1.0))
 
     # Explicit overdue bonus
