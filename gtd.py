@@ -11,6 +11,7 @@ from gtdlib.commands.build_cmd import cmd_build
 from gtdlib.commands.sync_cmd import cmd_sync
 from gtdlib.commands.context_cmd import cmd_context_list, cmd_context_add, cmd_context_drop
 from gtdlib.commands.capture_cmd import cmd_capture
+from gtdlib.commands.someday_cmd import cmd_someday_delete
 from gtdlib.commands.project_cmd import (
     cmd_project_list,
     cmd_project_edit,
@@ -77,6 +78,11 @@ def main() -> int:
     p_proj_purge.add_argument("--dry-run", action="store_true", help="Show what would be purged without deleting")
     p_proj_purge.add_argument("--days", type=int, default=28, help="Retention period in days (default: 28)")
 
+    p_someday = sub.add_parser("someday", help="Someday / Maybe operations")
+    someday = p_someday.add_subparsers(dest="someday_cmd", required=True)
+
+    someday.add_parser("delete", help="Delete a Someday / Maybe item")
+
     p_capture = sub.add_parser("capture", help="Fetch capture emails into inbox/inbox.md")
     p_capture.add_argument("--limit", type=int, default=50, help="Max emails to fetch (default: 50)")
 
@@ -117,6 +123,10 @@ def main() -> int:
             return cmd_project_archive_finalize(base_dir)
         if args.proj_cmd == "trash-purge":
             return cmd_project_trash_purge(base_dir, dry_run=bool(args.dry_run), days=int(args.days))
+
+    if args.cmd == "someday":
+        if args.someday_cmd == "delete":
+            return cmd_someday_delete(base_dir)
 
     if args.cmd == "capture":
         return cmd_capture(base_dir, limit=args.limit)
