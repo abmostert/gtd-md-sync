@@ -25,6 +25,7 @@ from gtdlib.commands.project_cmd import (
     cmd_project_archive_finalize,
     cmd_project_trash_purge,
 )
+from gtdlib.commands.workflow_cmd import cmd_workflow
 
 
 def main() -> int:
@@ -51,6 +52,8 @@ def main() -> int:
 
     p_sync = sub.add_parser("sync", help="Import checkbox completions from Markdown into master.json")
     p_sync.add_argument("--no-prompt-next", action="store_true", help="Do not prompt for next actions after sync")
+
+    p_workflow = sub.add_parser("workflow", help="Display a quick visual reminder of the GTD workflow")
 
     p_context = sub.add_parser("context", help="Manage allowed contexts")
     subc = p_context.add_subparsers(dest="context_cmd", required=True)
@@ -117,6 +120,9 @@ def main() -> int:
 
     if args.cmd == "sync":
         return cmd_sync(base_dir, prompt_next=not args.no_prompt_next)
+
+    if args.cmd == "workflow":
+        return cmd_workflow()
 
     if args.cmd == "context":
         if args.context_cmd == "list":
