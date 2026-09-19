@@ -11,7 +11,12 @@ from gtdlib.commands.build_cmd import cmd_build
 from gtdlib.commands.sync_cmd import cmd_sync
 from gtdlib.commands.context_cmd import cmd_context_list, cmd_context_add, cmd_context_drop
 from gtdlib.commands.capture_cmd import cmd_capture
-from gtdlib.commands.someday_cmd import cmd_someday_delete
+from gtdlib.commands.someday_cmd import (
+    cmd_someday_delete,
+    cmd_someday_category_create,
+    cmd_someday_category_list,
+    cmd_someday_category_delete,
+)
 from gtdlib.commands.project_cmd import (
     cmd_project_list,
     cmd_project_edit,
@@ -82,6 +87,18 @@ def main() -> int:
     someday = p_someday.add_subparsers(dest="someday_cmd", required=True)
 
     someday.add_parser("delete", help="Delete a Someday / Maybe item")
+    someday.add_parser(
+        "category-create",
+        help="Create a Someday / Maybe category",
+    )
+    someday.add_parser(
+        "category-list",
+        help="List Someday / Maybe categories",
+    )
+    someday.add_parser(
+        "category-delete",
+        help="Delete a Someday / Maybe category",
+    )
 
     p_capture = sub.add_parser("capture", help="Fetch capture emails into inbox/inbox.md")
     p_capture.add_argument("--limit", type=int, default=50, help="Max emails to fetch (default: 50)")
@@ -127,6 +144,15 @@ def main() -> int:
     if args.cmd == "someday":
         if args.someday_cmd == "delete":
             return cmd_someday_delete(base_dir)
+
+        if args.someday_cmd == "category-create":
+            return cmd_someday_category_create(base_dir)
+
+        if args.someday_cmd == "category-list":
+            return cmd_someday_category_list(base_dir)
+
+        if args.someday_cmd == "category-delete":
+            return cmd_someday_category_delete(base_dir)
 
     if args.cmd == "capture":
         return cmd_capture(base_dir, limit=args.limit)

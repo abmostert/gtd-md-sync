@@ -160,6 +160,7 @@ def ensure_config(base_dir: Path) -> dict:
     if not cfg_path.exists():
         cfg = {
             "contexts": list(DEFAULT_CONTEXTS),
+            "someday_categories": [],
             "focus": json.loads(json.dumps(DEFAULT_FOCUS_CONFIG)),
         }
         save_config(base_dir, cfg)
@@ -170,6 +171,10 @@ def ensure_config(base_dir: Path) -> dict:
 
     if "contexts" not in cfg:
         cfg["contexts"] = list(DEFAULT_CONTEXTS)
+        changed = True
+
+    if "someday_categories" not in cfg or not isinstance(cfg["someday_categories"], list):
+        cfg["someday_categories"] = []
         changed = True
 
     if "focus" not in cfg or not isinstance(cfg["focus"], dict):

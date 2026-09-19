@@ -7,7 +7,44 @@ from gtdlib.prompts.common import prompt, prompt_optional_date, prompt_optional_
 from gtdlib.rules.schema import validate_project_state
 
 
-def prompt_project_edit(existing_project: dict) -> dict:
+def prompt_someday_category(categories: list[str]) -> str | None:
+    categories = sorted(
+        {
+            str(c).strip().lower()
+            for c in categories
+            if str(c).strip()
+        }
+    )
+
+    if not categories:
+        return None
+
+    print("\nSomeday / Maybe category:")
+    print("  0. None")
+
+    for number, category in enumerate(categories, start=1):
+        print(f"  {number}. {category}")
+
+    while True:
+        raw = input("Choose category: ").strip()
+
+        if raw in {"", "0"}:
+            return None
+
+        if raw.isdigit():
+            choice = int(raw)
+
+            if 1 <= choice <= len(categories):
+                return categories[choice - 1]
+
+        print(f"Invalid choice. Enter 0-{len(categories)}.")
+
+
+def prompt_project_edit(
+    existing_project: dict,
+    *,
+    someday_categories: list[str] | None = None,
+) -> dict:
     p = deepcopy(existing_project or {})
 
     current_title = (p.get("title") or "").strip()
@@ -25,6 +62,15 @@ def prompt_project_edit(existing_project: dict) -> dict:
         prompt("State (active/someday/completed/dropped)", default=current_state)
     )
 
+    category = p.get("category")
+
+    if state == "someday":
+        category = prompt_someday_category(
+            someday_categories or []
+        )
+    else:
+        category = None
+
     due = prompt_optional_date_keep("Due date", p.get("due"))
     notes = prompt("Notes", default=str(current_notes)).strip()
     outcome = prompt("Outcome", default=str(current_outcome)).strip()
@@ -33,6 +79,7 @@ def prompt_project_edit(existing_project: dict) -> dict:
 
     p["title"] = title
     p["state"] = state
+    p["category"] = category
     p["due"] = due
     p["notes"] = notes
     p["outcome"] = outcome
@@ -47,6 +94,7 @@ def prompt_project_draft(
     now_iso: str,
     default_state: str = "active",
     full: bool = False,
+    someday_categories: list[str] | None = None,
 ) -> dict:
     title = prompt("Project title (outcome): ").strip()
     if not title:
@@ -55,6 +103,16 @@ def prompt_project_draft(
     state = validate_project_state(
         prompt("Project state (active/someday/completed/dropped): ", default=default_state)
     )
+
+    someday_categories: list[str]
+
+    category = None
+
+    if state == "someday":
+        category = prompt_someday_category(
+            someday_categories or []
+        )
+
     due = prompt_optional_date("Project due date")
 
     notes = ""
@@ -68,6 +126,7 @@ def prompt_project_draft(
     return {
         "title": title,
         "state": state,
+        "category": category,
         "created": now_iso,
         "reviewed": None,
         "due": due,
@@ -82,6 +141,7 @@ def render_project_preview(project_id: str | None, project: dict) -> None:
     pid = project_id or "(new project)"
     title = (project.get("title") or "").strip()
     state = (project.get("state") or "").strip()
+    category = project.get("category")
     due = project.get("due")
     notes = project.get("notes", "")
 
@@ -89,6 +149,7 @@ def render_project_preview(project_id: str | None, project: dict) -> None:
     print(f"Project ID: {pid}")
     print(f"Title:      {title}")
     print(f"State:      {state}")
+    print(f"Category:   {category}")
     print(f"Due:        {due}")
     print(f"Notes:      {notes}")
     print("-----------------------\n")

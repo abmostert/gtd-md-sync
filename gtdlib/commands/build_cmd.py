@@ -307,7 +307,7 @@ def _build_focus(views_dir: Path, actions: dict, projects: dict, base_dir: Path)
         lines.append("")
 
     (views_dir / "focus.md").write_text("\n".join(lines).strip() + "\n", encoding="utf-8")
-    
+
 
 def _build_projects(views_dir: Path, projects: dict, actions: dict) -> None:
     """
@@ -339,31 +339,75 @@ def _build_projects(views_dir: Path, projects: dict, actions: dict) -> None:
 
 
 def _build_someday(views_dir: Path, projects: dict, actions: dict) -> None:
-    lines: list[str] = ["# Someday / Maybe\n"]
+    lines: list[str] = ["# Someday / Maybe", ""]
 
-        
     someday_projects = [
         (pid, p)
         for pid, p in projects.items()
         if is_someday_project(p)
     ]
-    
+
     someday_actions: list[tuple[str, dict]] = [
         (aid, a)
         for aid, a in actions.items()
         if is_visible_someday_action(a, projects)
     ]
 
+    # -------------------------
+    # SOMEDAY PROJECTS
+    # -------------------------
     if someday_projects:
-        lines.append("## Projects\n")
-        for pid, p in sorted(someday_projects, key=lambda t: (t[1].get("title", "") or "").lower()):
-            lines.append(f"- {p.get('title','')} {_id_comment(pid)}")
+        lines.append("## Projects")
         lines.append("")
 
+        by_category: dict[str, list[tuple[str, dict]]] = defaultdict(list)
+
+        for pid, project in someday_projects:
+            category = (project.get("category") or "").strip()
+
+            if not category:
+                category = "Uncategorized"
+
+            by_category[category].append((pid, project))
+
+        # Named categories first, Uncategorized last
+        category_names = sorted(
+            [c for c in by_category if c != "Uncategorized"],
+            key=str.lower,
+        )
+
+        if "Uncategorized" in by_category:
+            category_names.append("Uncategorized")
+
+        for category in category_names:
+            lines.append(f"### {category}")
+            lines.append("")
+
+            items = sorted(
+                by_category[category],
+                key=lambda t: (t[1].get("title", "") or "").lower(),
+            )
+
+            for pid, project in items:
+                title = (project.get("title") or "").strip()
+                lines.append(f"- {title} {_id_comment(pid)}")
+
+            lines.append("")
+
+    # -------------------------
+    # SOMEDAY ACTIONS
+    # -------------------------
     if someday_actions:
-        lines.append("## Actions\n")
-        for aid, a in sorted(someday_actions, key=lambda t: (t[1].get("title", "") or "").lower()):
-            lines.append(f"- {a.get('title','')} {_id_comment(aid)}")
+        lines.append("## Actions")
+        lines.append("")
+
+        for aid, action in sorted(
+            someday_actions,
+            key=lambda t: (t[1].get("title", "") or "").lower(),
+        ):
+            title = (action.get("title") or "").strip()
+            lines.append(f"- {title} {_id_comment(aid)}")
+
         lines.append("")
 
     (views_dir / "someday.md").write_text(
@@ -371,11 +415,10 @@ def _build_someday(views_dir: Path, projects: dict, actions: dict) -> None:
         encoding="utf-8",
     )
 
-
 def _build_waiting_for(views_dir: Path, actions: dict, projects: dict) -> None:
     lines: list[str] = ["# Waiting For", ""]
 
-        
+
     items: list[tuple[str, dict]] = [
         (aid, a)
         for aid, a in actions.items()

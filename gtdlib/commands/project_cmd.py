@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 
-from gtdlib.store import load_master, save_master, utc_now_iso, new_id
+from gtdlib.store import load_master, save_master, utc_now_iso, new_id, ensure_config
 from gtdlib.prompts.selectors import choose_project_id
 from gtdlib.prompts.project_prompts import prompt_project_edit
 from gtdlib.prompts.action_prompts import prompt_action_draft, render_action_preview
@@ -27,13 +27,52 @@ def cmd_project_list(base_dir: Path, *, state: str | None = None) -> int:
     projects: dict = master.get("projects", {})
     actions: dict = master.get("actions", {})
 
-    want_state = (state or "").strip().lower() if state else None
+    # If no state was supplied explicitly, ask what to show.
+    if state is None:
+        print("\nList which type of project?")
+        print("  1. Active")
+        print("  2. Someday / Maybe")
+        print("  3. All")
+        print("  0. Cancel")
+
+        while True:
+            raw = input("\nChoose project type: ").strip()
+
+            if raw in {"", "0"}:
+                print("Cancelled.")
+                return 0
+
+            if raw == "1":
+                want_state = "active"
+                break
+
+            if raw == "2":
+                want_state = "someday"
+                break
+
+            if raw == "3":
+                want_state = None
+                break
+
+            print("Invalid choice. Enter 0, 1, 2, or 3.")
+
+    else:
+        want_state = state.strip().lower()
 
     rows: list[tuple[str, str, str]] = []
+
     for pid, p in projects.items():
+        lifecycle = (p.get("lifecycle") or "live").strip().lower()
+
+        # Only list live projects here.
+        if lifecycle != "live":
+            continue
+
         st = (p.get("state") or "unknown").strip().lower()
+
         if want_state and st != want_state:
             continue
+
         title = (p.get("title") or "").strip() or pid
         rows.append((pid, title, st))
 
@@ -44,14 +83,22 @@ def cmd_project_list(base_dir: Path, *, state: str | None = None) -> int:
     rows.sort(key=lambda t: (t[2], t[1].lower()))
 
     print("\nProjects:")
+
     for pid, title, st in rows:
         counts = count_actions_by_state(actions, pid)
+
         active = counts.get("active", 0)
         waiting = counts.get("waiting", 0)
         someday = counts.get("someday", 0)
+
         due = projects.get(pid, {}).get("due")
         due_s = f", due {due}" if due else ""
-        print(f"- {title} ({st}{due_s}) — actions: active={active}, waiting={waiting}, someday={someday} [{pid}]")
+
+        print(
+            f"- {title} ({st}{due_s}) — "
+            f"actions: active={active}, waiting={waiting}, someday={someday} "
+            f"[{pid}]"
+        )
 
     return 0
 
@@ -61,7 +108,47 @@ def cmd_project_edit(base_dir: Path) -> int:
     projects: dict = master.get("projects", {})
     actions: dict = master.get("actions", {})
 
-    pid = choose_project_id(projects)
+    print("\nEdit which type of project?")
+    print("  1. Active")
+    print("  2. Someday / Maybe")
+    print("  0. Cancel")
+
+    while True:
+        raw = input("\nChoose project type: ").strip()
+
+        if raw in {"", "0"}:
+            print("Cancelled.")
+            return 0
+
+        if raw == "1":
+            wanted_state = "active"
+            break
+
+        if raw == "2":
+            wanted_state = "someday"
+            break
+
+        print("Invalid choice. Enter 0, 1, or 2.")
+
+    eligible_projects = {
+        pid: project
+        for pid, project in projects.items()
+        if (project.get("state") or "").strip().lower() == wanted_state
+        and (project.get("lifecycle") or "live").strip().lower() == "live"
+    }
+
+    if not eligible_projects:
+        if wanted_state == "active":
+            print("No active projects found.")
+        else:
+            print("No Someday / Maybe projects found.")
+        return 0
+
+    pid = choose_project_id(
+        eligible_projects,
+        allow_states=None,
+    )
+
     if not pid:
         print("Cancelled.")
         return 0
@@ -78,8 +165,14 @@ def cmd_project_edit(base_dir: Path) -> int:
 
     # ---- edit fields ----
     if op == "edit_fields":
+        cfg = ensure_config(base_dir)
+        someday_categories = cfg.get("someday_categories", [])
+
         try:
-            updated = prompt_project_edit(p)
+            updated = prompt_project_edit(
+                p,
+                someday_categories=someday_categories,
+            )
         except ValueError as e:
             print(f"Error: {e}")
             return 2
@@ -404,7 +497,7 @@ def cmd_project_archive_finalize(base_dir: Path) -> int:
         return 2
 
     ensure_project_notes_for_project(base_dir, pid, projects[pid], actions)
-  
+
     title = (p.get("title") or pid).strip()
 
     print("\nArchive-finalize will:")

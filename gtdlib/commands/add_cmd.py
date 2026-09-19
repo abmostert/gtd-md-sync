@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from gtdlib.store import load_master, new_id, save_master, utc_now_iso
+from gtdlib.store import load_master, new_id, save_master, utc_now_iso, ensure_config
 from gtdlib.config import get_contexts
 
 from gtdlib.prompts.action_prompts import prompt_action_draft, render_action_preview
@@ -29,6 +29,10 @@ def cmd_add(base_dir: Path, *, full: bool = False) -> int:
 
     # Contexts are enforced by config (except for waiting actions)
     contexts = get_contexts(base_dir)
+
+    # Make sure that the categories are available
+    cfg = ensure_config(base_dir)
+    someday_categories = cfg.get("someday_categories", [])
 
     kind = input("Add (a)ction or (p)roject? [a] ").strip().lower() or "a"
     if kind not in {"a", "p"}:
@@ -76,11 +80,7 @@ def cmd_add(base_dir: Path, *, full: bool = False) -> int:
             print(f"Added action {aid}: {draft['title']}")
             return 0
 
-    # -------------------------
-    # PROJECT BRANCH
-    # -------------------------
-    # If we reach here, kind == "p"
-        # -------------------------
+
     # PROJECT BRANCH
     # -------------------------
     # If we reach here, kind == "p"
@@ -92,6 +92,7 @@ def cmd_add(base_dir: Path, *, full: bool = False) -> int:
                 now_iso=now,
                 default_state="active",
                 full=full,
+                someday_categories=someday_categories,
             )
         except ValueError as e:
             print(str(e))

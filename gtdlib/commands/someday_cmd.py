@@ -2,12 +2,145 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from gtdlib.store import load_master, save_master
+from gtdlib.store import load_master, save_master, ensure_config, save_config
 from gtdlib.rules.project_folders import find_project_folder
 from gtdlib.rules.visibility import (
     is_someday_project,
     is_visible_someday_action,
 )
+
+
+def cmd_someday_category_list(base_dir: Path) -> int:
+    cfg = ensure_config(base_dir)
+
+    categories = cfg.get("someday_categories", [])
+    if not isinstance(categories, list):
+        categories = []
+
+    categories = sorted(
+        {
+            str(c).strip().lower()
+            for c in categories
+            if str(c).strip()
+        }
+    )
+
+    if not categories:
+        print("No Someday / Maybe categories configured.")
+        return 0
+
+    print("\nSomeday / Maybe categories:\n")
+
+    for number, category in enumerate(categories, start=1):
+        print(f"  {number}. {category}")
+
+    return 0
+
+
+def cmd_someday_category_create(base_dir: Path) -> int:
+    cfg = ensure_config(base_dir)
+
+    raw = input("New Someday / Maybe category: ").strip()
+
+    if not raw:
+        print("Cancelled.")
+        return 0
+
+    category = raw.lower().replace("-", "_").replace(" ", "_")
+
+    while "__" in category:
+        category = category.replace("__", "_")
+
+    category = category.strip("_")
+
+    if not category:
+        print("Error: category name cannot be blank.")
+        return 2
+
+    if not all(ch.isalnum() or ch == "_" for ch in category):
+        print("Error: category name must contain only letters, numbers, and underscores.")
+        return 2
+
+    categories = cfg.get("someday_categories", [])
+    if not isinstance(categories, list):
+        categories = []
+
+    normalized = {
+        str(c).strip().lower()
+        for c in categories
+        if str(c).strip()
+    }
+
+    if category in normalized:
+        print(f"Category already exists: {category}")
+        return 0
+
+    normalized.add(category)
+
+    cfg["someday_categories"] = sorted(normalized)
+    save_config(base_dir, cfg)
+
+    print(f"Added Someday / Maybe category: {category}")
+    return 0
+
+
+def cmd_someday_category_delete(base_dir: Path) -> int:
+    cfg = ensure_config(base_dir)
+
+    categories = cfg.get("someday_categories", [])
+    if not isinstance(categories, list):
+        categories = []
+
+    categories = sorted(
+        {
+            str(c).strip().lower()
+            for c in categories
+            if str(c).strip()
+        }
+    )
+
+    if not categories:
+        print("No Someday / Maybe categories configured.")
+        return 0
+
+    print("\nSomeday / Maybe categories:\n")
+
+    for number, category in enumerate(categories, start=1):
+        print(f"  {number}. {category}")
+
+    print("  0. Cancel")
+
+    while True:
+        raw = input("\nDelete which category? ").strip()
+
+        if raw in {"", "0"}:
+            print("Cancelled.")
+            return 0
+
+        if raw.isdigit():
+            choice = int(raw)
+            if 1 <= choice <= len(categories):
+                break
+
+        print(f"Invalid choice. Enter 0-{len(categories)}.")
+
+    category = categories[choice - 1]
+
+    answer = input(
+        f"Delete Someday / Maybe category '{category}'? [y/N]: "
+    ).strip().lower()
+
+    if answer not in {"y", "yes"}:
+        print("Cancelled.")
+        return 0
+
+    remaining = [c for c in categories if c != category]
+
+    cfg["someday_categories"] = remaining
+    save_config(base_dir, cfg)
+
+    print(f"Deleted Someday / Maybe category: {category}")
+    return 0
 
 
 def cmd_someday_delete(base_dir: Path) -> int:
