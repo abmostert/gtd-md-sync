@@ -58,9 +58,26 @@ def prompt_project_edit(
     if not title:
         raise ValueError("Project title cannot be blank.")
 
-    state = validate_project_state(
-        prompt("State (active/someday/completed/dropped)", default=current_state)
-    )
+    print("\nProject type:")
+    print("  1. Active")
+    print("  2. Someday / Maybe")
+    print("  0. Cancel")
+
+    while True:
+        raw = input("\nChoose project type: ").strip()
+
+        if raw in {"", "0"}:
+            raise ValueError("Cancelled.")
+
+        if raw == "1":
+            state = "active"
+            break
+
+        if raw == "2":
+            state = "someday"
+            break
+
+        print("Invalid choice. Enter 0, 1, or 2.")
 
     category = p.get("category")
 

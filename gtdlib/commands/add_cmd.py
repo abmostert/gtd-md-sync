@@ -34,10 +34,27 @@ def cmd_add(base_dir: Path, *, full: bool = False) -> int:
     cfg = ensure_config(base_dir)
     someday_categories = cfg.get("someday_categories", [])
 
-    kind = input("Add (a)ction or (p)roject? [a] ").strip().lower() or "a"
-    if kind not in {"a", "p"}:
-        print("Cancelled: please enter 'a' or 'p'.")
-        return 2
+    print("\nWhat would you like to add?")
+    print("  1. Action")
+    print("  2. Project")
+    print("  0. Cancel")
+
+    while True:
+        raw = input("\nChoose: ").strip()
+
+        if raw in {"", "0"}:
+            print("Cancelled.")
+            return 0
+
+        if raw == "1":
+            kind = "a"
+            break
+
+        if raw == "2":
+            kind = "p"
+            break
+
+        print("Invalid choice. Enter 0, 1, or 2.")
 
     # -------------------------
     # ACTION BRANCH
