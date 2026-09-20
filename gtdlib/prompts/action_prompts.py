@@ -56,12 +56,28 @@ def choose_context(contexts: list[str]) -> str:
 
 
 def prompt_action_state(*, default: str = "active") -> str:
+    print("\nAction state:")
+    print("  1. Active")
+    print("  2. Waiting")
+    print("  3. Someday / Maybe")
+    print("  0. Cancel")
+
     while True:
-        raw = prompt("State (active/waiting/someday): ", default=default).strip()
-        try:
-            return validate_action_state(raw)
-        except ValueError as e:
-            print(str(e))
+        raw = input("\nChoose action state: ").strip()
+
+        if raw in {"", "0"}:
+            raise ValueError("Cancelled.")
+
+        if raw == "1":
+            return "active"
+
+        if raw == "2":
+            return "waiting"
+
+        if raw == "3":
+            return "someday"
+
+        print("Invalid choice. Enter 0, 1, 2, or 3.")
 
 
 
@@ -114,10 +130,15 @@ def prompt_action_draft(
 
     if state == "waiting":
         waiting_for = prompt_waiting_for()
+
         if ask_context_when_waiting:
             context = choose_context(contexts)
-    else:
+
+    elif state == "active":
         context = choose_context(contexts)
+
+    elif state == "someday":
+        context = None
 
     due = prompt_optional_date("Due date")
     notes = ""
