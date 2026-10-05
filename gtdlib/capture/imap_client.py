@@ -38,7 +38,14 @@ def _quote_mailbox(name: str) -> str:
     return s
 
 
-def _connect_imap(host: str, port: int, *, starttls: bool, tls_verify: bool):
+def _connect_imap(
+    host: str,
+    port: int,
+    *,
+    starttls: bool,
+    tls_verify: bool,
+    timeout: float = 20.0,
+):
     """
     Connect to IMAP.
 
@@ -46,7 +53,7 @@ def _connect_imap(host: str, port: int, *, starttls: bool, tls_verify: bool):
     - If starttls=False: connect using IMAP4_SSL (for servers speaking SSL immediately).
     """
     if starttls:
-        m = imaplib.IMAP4(host, port)
+        m = imaplib.IMAP4(host, port, timeout=timeout)
         if tls_verify:
             ctx = ssl.create_default_context()
         else:
@@ -60,7 +67,12 @@ def _connect_imap(host: str, port: int, *, starttls: bool, tls_verify: bool):
     else:
         ctx = ssl._create_unverified_context()
     try:
-        return imaplib.IMAP4_SSL(host, port, ssl_context=ctx)
+        return imaplib.IMAP4_SSL(
+    host,
+    port,
+    ssl_context=ctx,
+    timeout=timeout,
+)
     except TypeError:
         # older python fallback
         return imaplib.IMAP4_SSL(host, port)
@@ -196,19 +208,20 @@ def _imap_delete_uid(m: imaplib.IMAP4, uid: str) -> None:
 
 def _imap_move_uid(m: imaplib.IMAP4, uid: str, dest_folder: str) -> None:
     """
-    Try UID MOVE if supported, else COPY + DELETE fallback.
+    Move a message using COPY + DELETE.
+
+    We deliberately avoid UID MOVE here because Proton Bridge has
+    demonstrated hangs while processing that command.
     """
     dest = _quote_mailbox(dest_folder)
 
-    # Try MOVE first (RFC 6851). Some servers support it.
-    typ, _ = m.uid("move", uid, dest)
-    if typ == "OK":
-        return
-
-    # Fallback: COPY then delete+expunge
     typ, _ = m.uid("copy", uid, dest)
+
     if typ != "OK":
-        raise RuntimeError(f"Failed to move uid {uid}: MOVE and COPY both failed")
+        raise RuntimeError(
+            f"Failed to copy uid {uid} to {dest_folder}"
+        )
+
     _imap_delete_uid(m, uid)
 
 
@@ -313,7 +326,14 @@ def fetch_from_imap(
     finally:
         if m is not None:
             try:
+                if getattr(m, "sock", None) is not None:
+                    m.sock.settimeout(2.0)
+
                 m.logout()
-            except Exception:
-                pass
+
+            except BaseException:
+                try:
+                    m.shutdown()
+                except BaseException:
+                    pass
 
