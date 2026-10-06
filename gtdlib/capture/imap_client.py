@@ -10,7 +10,7 @@ from datetime import datetime
 from email import message_from_bytes
 from email.message import Message
 from pathlib import Path
-from typing import Iterable
+from typing import Callable, Iterable
 
 
 
@@ -164,34 +164,74 @@ def _strip_html(html: str) -> str:
     return s
 
 
-def _save_attachments(msg: Message, attachments_dir: Path, subject: str) -> list[Path]:
+def _save_attachments(
+    msg: Message,
+    attachments_dir: Path,
+    subject: str,
+    uid: str,
+) -> list[Path]:
+    """
+    Save all MIME parts explicitly marked as attachments.
+
+    Attachment filenames include the source-folder IMAP UID so that if
+    capture is interrupted before the email is moved, retrying the same
+    message reuses the same attachment filename instead of creating
+    timestamp-based duplicates.
+
+    A message must not be moved remotely unless every attachment has been
+    written successfully and its size matches the decoded MIME payload.
+    """
     attachments_dir.mkdir(parents=True, exist_ok=True)
 
     out: list[Path] = []
-    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
 
     for part in msg.walk():
         disp = (part.get("Content-Disposition") or "").lower()
+
         if "attachment" not in disp:
             continue
 
         payload = part.get_payload(decode=True)
+
         if payload is None:
-            continue
+            raise RuntimeError(
+                f"Attachment payload could not be decoded for uid {uid}"
+            )
 
         filename = part.get_filename() or "attachment"
         filename = _safe_filename(filename)
 
         subj = _safe_filename(subject)
-        base = f"{ts}_{subj}_{filename}" if subj else f"{ts}_{filename}"
+        safe_uid = _safe_filename(uid)
+
+        if subj:
+            base = f"{safe_uid}_{subj}_{filename}"
+        else:
+            base = f"{safe_uid}_{filename}"
+
         fp = attachments_dir / base
 
-        # avoid overwrite
-        if fp.exists():
-            root, ext = os.path.splitext(fp.name)
-            fp = attachments_dir / f"{root}_01{ext}"
+        # If the same message is retried, overwrite its own deterministic
+        # attachment path. This avoids duplicate files after interruption.
+        with fp.open("wb") as f:
+            f.write(payload)
+            f.flush()
+            os.fsync(f.fileno())
 
-        fp.write_bytes(payload)
+        if not fp.exists():
+            raise RuntimeError(
+                f"Attachment was not created for uid {uid}: {fp}"
+            )
+
+        actual_size = fp.stat().st_size
+        expected_size = len(payload)
+
+        if actual_size != expected_size:
+            raise RuntimeError(
+                f"Attachment verification failed for uid {uid}: "
+                f"{fp} expected {expected_size} bytes, got {actual_size}"
+            )
+
         out.append(fp)
 
     return out
@@ -238,9 +278,9 @@ def fetch_from_imap(
     search_query: str = "ALL",
     starttls: bool = True,
     tls_verify: bool = False,
-    post_fetch: str = "none",   # "none" | "move" | "delete"
-    move_to: str | None = None
-
+    post_fetch: str = "none",
+    move_to: str | None = None,
+    on_captured: Callable[[CapturedEmail], None] | None = None,
 ) -> list[CapturedEmail]:
     """
     Fetch messages from IMAP folder using UID fetch.
@@ -301,11 +341,24 @@ def fetch_from_imap(
 
             subject = _decode_subject(msg)
             body = _extract_text(msg)
-            atts = _save_attachments(msg, out_attachments_dir, subject)
+            atts = _save_attachments(msg, out_attachments_dir, subject, uid)
 
-            results.append(CapturedEmail(uid=uid, subject=subject, body_text=body, attachments=atts))
+            item = CapturedEmail(
+            uid=uid,
+            subject=subject,
+            body_text=body,
+            attachments=atts,
+            )
 
-            # Post-fetch handling to prevent re-capture loops
+            # IMPORTANT:
+            # Commit the captured item locally before changing the remote mailbox.
+            # If this raises for any reason, the email remains in the capture folder.
+            if on_captured is not None:
+                on_captured(item)
+
+            results.append(item)
+
+            # Only after the local commit succeeded may the remote message move/delete.
             if post_fetch != "none":
                 if post_fetch == "move":
                     if not move_to:
