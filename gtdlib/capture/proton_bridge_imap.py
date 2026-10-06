@@ -4,7 +4,7 @@ import getpass
 
 from dataclasses import dataclass
 from pathlib import Path
-
+from typing import Callable
 from gtdlib.store import ensure_config
 from gtdlib.capture.imap_client import fetch_from_imap, CapturedEmail
 
@@ -59,7 +59,12 @@ def load_proton_bridge_config(base_dir: Path) -> ProtonBridgeConfig:
         tls_verify=tls_verify, post_fetch=post_fetch, move_to=move_to,)
 
 
-def fetch_capture_emails(base_dir: Path, attachments_dir: Path, limit: int = 50) -> list[CapturedEmail]:
+def fetch_capture_emails(
+    base_dir: Path,
+    attachments_dir: Path,
+    limit: int = 50,
+    on_captured: Callable[[CapturedEmail], None] | None = None,
+) -> list[CapturedEmail]:
     cfg = load_proton_bridge_config(base_dir)
     print(f"[capture] post_fetch={cfg.post_fetch!r} move_to={cfg.move_to!r}")
 
@@ -76,5 +81,6 @@ def fetch_capture_emails(base_dir: Path, attachments_dir: Path, limit: int = 50)
         tls_verify=cfg.tls_verify,
         post_fetch=cfg.post_fetch,
         move_to=cfg.move_to,
+        on_captured=on_captured,
     )
 
