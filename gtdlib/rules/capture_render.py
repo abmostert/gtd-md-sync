@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 from typing import Iterable
-
+import os
 from gtdlib.capture.imap_client import CapturedEmail
 
 _UID_RE = re.compile(r"<!--\s*uid:(?P<uid>[^>]+?)\s*-->")
@@ -77,5 +77,13 @@ def render_capture_inbox_md(items: list[CapturedEmail], inbox_md: Path, base_dir
         )
 
     merged = existing_text.rstrip() + "\n\n" + "\n".join(lines).rstrip() + "\n"
-    inbox_md.write_text(merged, encoding="utf-8")
+    
+    tmp = inbox_md.with_name(inbox_md.name + ".tmp")
+
+    with tmp.open("w", encoding="utf-8") as f:
+        f.write(merged)
+        f.flush()
+        os.fsync(f.fileno())
+
+    os.replace(tmp, inbox_md)
     return new_count
