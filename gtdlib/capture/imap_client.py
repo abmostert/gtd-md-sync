@@ -171,24 +171,33 @@ def _save_attachments(
     uid: str,
 ) -> list[Path]:
     """
-    Save all MIME parts explicitly marked as attachments.
+    Save and verify attachment-like MIME parts.
 
-    Attachment filenames include the source-folder IMAP UID so that if
-    capture is interrupted before the email is moved, retrying the same
-    message reuses the same attachment filename instead of creating
-    timestamp-based duplicates.
+    A MIME part is treated as an attachment when:
+      - Content-Disposition says attachment, OR
+      - the part has a filename.
 
-    A message must not be moved remotely unless every attachment has been
-    written successfully and its size matches the decoded MIME payload.
+    This also catches files exposed as inline attachments by some mail
+    clients / Proton Bridge.
     """
     attachments_dir.mkdir(parents=True, exist_ok=True)
 
     out: list[Path] = []
 
     for part in msg.walk():
-        disp = (part.get("Content-Disposition") or "").lower()
+        # Never treat multipart container nodes as files.
+        if part.is_multipart():
+            continue
 
-        if "attachment" not in disp:
+        disp = (part.get("Content-Disposition") or "").lower()
+        raw_filename = part.get_filename()
+
+        is_attachment = (
+            "attachment" in disp
+            or bool(raw_filename)
+        )
+
+        if not is_attachment:
             continue
 
         payload = part.get_payload(decode=True)
@@ -198,7 +207,7 @@ def _save_attachments(
                 f"Attachment payload could not be decoded for uid {uid}"
             )
 
-        filename = part.get_filename() or "attachment"
+        filename = raw_filename or "attachment"
         filename = _safe_filename(filename)
 
         subj = _safe_filename(subject)
@@ -211,8 +220,6 @@ def _save_attachments(
 
         fp = attachments_dir / base
 
-        # If the same message is retried, overwrite its own deterministic
-        # attachment path. This avoids duplicate files after interruption.
         with fp.open("wb") as f:
             f.write(payload)
             f.flush()
@@ -223,8 +230,8 @@ def _save_attachments(
                 f"Attachment was not created for uid {uid}: {fp}"
             )
 
-        actual_size = fp.stat().st_size
         expected_size = len(payload)
+        actual_size = fp.stat().st_size
 
         if actual_size != expected_size:
             raise RuntimeError(
@@ -232,6 +239,7 @@ def _save_attachments(
                 f"{fp} expected {expected_size} bytes, got {actual_size}"
             )
 
+        print(f"[capture] saved attachment: {fp.name}")
         out.append(fp)
 
     return out
