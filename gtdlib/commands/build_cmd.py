@@ -16,9 +16,18 @@ from gtdlib.rules.visibility import (
     is_visible_someday_action,
     is_visible_waiting_action,
 )
-import math
-from datetime import date
+from datetime import date, datetime, timezone
 from gtdlib.config import get_focus_config
+from gtdlib.rules.scoring import (
+    days_until,
+    due_bucket,
+    parse_iso_date,
+    score_next_action,
+)
+from gtdlib.metrics.weekly import (
+    render_project_metrics_markdown,
+    week_start_for,
+)
 
 
 def cmd_build(base_dir: Path) -> int:
@@ -47,6 +56,21 @@ def cmd_build(base_dir: Path) -> int:
     _build_stalled_projects(views_dir, actions, projects)
     build_project_notes(base_dir, projects, actions)
 
+    current_week_start = week_start_for(
+        datetime.now(timezone.utc)
+    )
+
+    metrics_text = render_project_metrics_markdown(
+        base_dir,
+        master,
+        current_week_start,
+    )
+
+    (views_dir / "metrics.md").write_text(
+        metrics_text,
+        encoding="utf-8",
+    )
+
     print("Views rebuilt.")
     return 0
 
@@ -54,94 +78,7 @@ def cmd_build(base_dir: Path) -> int:
 def _id_comment(item_id: str) -> str:
     return f"<!-- id:{item_id} -->"
 
-def _parse_iso_date(s: str | None) -> date | None:
-    if not s:
-        return None
-    try:
-        return date.fromisoformat(str(s).strip())
-    except Exception:
-        return None
 
-
-def _days_until(target: date | None, today: date) -> int | None:
-    if target is None:
-        return None
-    return (target - today).days
-
-
-def _action_age_days(action: dict, today: date) -> int:
-    created = _parse_iso_date((action.get("created") or "")[:10])
-    last_touched = _parse_iso_date((action.get("last_touched") or "")[:10])
-
-    basis = created or last_touched
-    if basis is None:
-        return 0
-
-    age = (today - basis).days
-    return max(age, 0)
-
-def _due_bucket(action: dict, today: date) -> tuple[int, int]:
-    """
-    Return a sorting bucket for focus rendering.
-
-    Lower bucket number = higher urgency.
-    Buckets:
-      0 = overdue
-      1 = due today
-      2 = everything else
-
-    Second value is days until due, or a large fallback.
-    """
-    due_dt = _parse_iso_date(action.get("due"))
-    d = _days_until(due_dt, today)
-
-    if d is None:
-        return (2, 999999)
-    if d < 0:
-        return (0, d)
-    if d == 0:
-        return (1, d)
-    return (2, d)
-
-
-def _score_next_action(action: dict, project: dict | None, today: date, weights: dict) -> float:
-    action_due = _parse_iso_date(action.get("due"))
-    project_due = _parse_iso_date(project.get("due")) if project else None
-
-    d_a = _days_until(action_due, today)
-    d_p = _days_until(project_due, today)
-    age_days = _action_age_days(action, today)
-
-    score = 0.0
-
-    # Action due urgency
-    if d_a is not None:
-        if d_a >= 0:
-            score += weights["action_due"] / (d_a + 1.0)
-        else:
-            score += weights["action_due"] + weights["action_overdue_slope"] * abs(d_a)
-
-    # Project due urgency
-    if d_p is not None:
-        if d_p >= 0:
-            score += weights["project_due"] / (d_p + 1.0)
-        else:
-            score += weights["project_due"] + weights["project_overdue_slope"] * abs(d_p)
-
-    # Age / stagnation pressure
-    score += weights["age"] * math.log(age_days + 1.0)
-
-    # Action/project tension
-    # Only apply when the project due date is in the future.
-    # If the project is due today or overdue, project urgency already captures that.
-    if d_a is not None and d_p is not None and d_p > 0 and d_p > d_a:
-        score += weights["tension"] * ((d_p - d_a) / (d_p + 1.0))
-
-    # Explicit overdue bonus
-    if d_a is not None and d_a < 0:
-        score += weights["overdue_bonus"]
-
-    return score
 
 
 
@@ -217,7 +154,7 @@ def _build_focus(views_dir: Path, actions: dict, projects: dict, base_dir: Path)
     for aid, action in items:
         pid = action.get("project")
         project = projects.get(pid) if pid else None
-        score = _score_next_action(action, project, today, focus_cfg["weights"])
+        score = score_next_action(action, project, today, focus_cfg["weights"])
         scored.append((aid, action, score))
 
     context_cap = focus_cfg["context_cap"]
@@ -229,8 +166,8 @@ def _build_focus(views_dir: Path, actions: dict, projects: dict, base_dir: Path)
     remaining: list[tuple[str, dict, float]] = []
 
     for aid, action, score in scored:
-        due_dt = _parse_iso_date(action.get("due"))
-        d = _days_until(due_dt, today)
+        due_dt = parse_iso_date(action.get("due"))
+        d = days_until(due_dt, today)
 
         is_overdue = d is not None and d < 0
         is_due_today = d is not None and d == 0
@@ -284,7 +221,7 @@ def _build_focus(views_dir: Path, actions: dict, projects: dict, base_dir: Path)
         items_in_context = sorted(
             by_context[ctx],
             key=lambda t: (
-                _due_bucket(t[1], today),
+                due_bucket(t[1], today),
                 -t[2],
                 (t[1].get("title") or "").lower(),
             ),

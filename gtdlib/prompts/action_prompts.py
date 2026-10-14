@@ -152,6 +152,7 @@ def prompt_action_draft(
         "context": context,
         "waiting_for": waiting_for,
         "created": now_iso,
+        "activated_at": now_iso if state in {"active", "waiting"} else None,
         "last_touched": now_iso,
         "waiting_since": now_iso if state == "waiting" else None,
         "due": due,

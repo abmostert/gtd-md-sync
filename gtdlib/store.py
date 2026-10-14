@@ -8,7 +8,7 @@ from pathlib import Path
 from uuid import uuid4
 from gtdlib.rules.contexts import normalize_context
 
-MASTER_SCHEMA_VERSION = 2
+MASTER_SCHEMA_VERSION = 5
 MASTER_FILENAME = "master.json"
 CONFIG_FILENAME = "config.json"
 VIEWS_DIRNAME = "views"
@@ -79,6 +79,102 @@ def ensure_master_schema(master: dict) -> tuple[dict, bool]:
                     changed = True
 
         meta["schema_version"] = 2
+        changed = True
+
+    if current < 3:
+        # v3 adds project.lifetime_action_count.
+        #
+        # Existing projects are initialized from the number of actions
+        # currently associated with them. This is the best available
+        # baseline for projects created before lifetime counting existed.
+        projects = master.get("projects", {})
+        actions = master.get("actions", {})
+
+        if isinstance(projects, dict) and isinstance(actions, dict):
+            action_counts: dict[str, int] = {}
+
+            for action in actions.values():
+                if not isinstance(action, dict):
+                    continue
+
+                pid = action.get("project")
+                if not pid:
+                    continue
+
+                action_counts[pid] = action_counts.get(pid, 0) + 1
+
+            for pid, project in projects.items():
+                if not isinstance(project, dict):
+                    continue
+
+                if "lifetime_action_count" not in project:
+                    project["lifetime_action_count"] = action_counts.get(pid, 0)
+                    changed = True
+
+        meta["schema_version"] = 3
+        changed = True
+
+    if current < 4:
+        # v4 adds project.activated_at.
+        #
+        # Existing active projects are initialized using their creation
+        # timestamp as the best available historical baseline.
+        # Someday projects have never entered the active workload as far
+        # as the current data can prove, so they start with None.
+        projects = master.get("projects", {})
+
+        if isinstance(projects, dict):
+            for project in projects.values():
+                if not isinstance(project, dict):
+                    continue
+
+                if "activated_at" in project:
+                    continue
+
+                state = str(
+                    project.get("state") or ""
+                ).strip().lower()
+
+                if state == "someday":
+                    project["activated_at"] = None
+                else:
+                    project["activated_at"] = project.get("created")
+
+                changed = True
+
+        meta["schema_version"] = 4
+        changed = True
+
+    if current < 5:
+        # v5 adds action.activated_at.
+        #
+        # Existing active/waiting actions use their creation timestamp as
+        # the best available historical baseline.
+        # Someday/completed actions are not currently entering the active
+        # workload, so they start without an activation timestamp unless
+        # historical data already provides one.
+        actions = master.get("actions", {})
+
+        if isinstance(actions, dict):
+            for action in actions.values():
+                if not isinstance(action, dict):
+                    continue
+
+                if "activated_at" in action:
+                    continue
+
+                state = str(
+                    action.get("state") or ""
+                ).strip().lower()
+
+                if state in {"active", "waiting"}:
+                    action["activated_at"] = action.get("created")
+                else:
+                    action["activated_at"] = None
+
+                changed = True
+
+        meta["schema_version"] = 5
         changed = True
 
     return master, changed

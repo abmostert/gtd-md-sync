@@ -22,6 +22,13 @@ from gtdlib.parsing.markdown import (
 from gtdlib.parsing.project_notes import parse_project_notes
 from gtdlib.prompts.stalled_project_prompts import prompt_next_action_for_stalled_project
 from gtdlib.rules.contexts import normalize_context
+from gtdlib.metrics.weekly import (
+    action_weight_at,
+    ensure_week_snapshot,
+)
+from gtdlib.metrics.log import append_metric_event
+from gtdlib.rules.visibility import is_visible_next_action
+from datetime import datetime, timezone
 
 import re
 
@@ -80,7 +87,12 @@ def _draft_action_already_exists(
 
     return False
 
-def _apply_existing_action_edit(actions: dict, action_edit) -> bool:
+def _apply_existing_action_edit(
+    base_dir: Path,
+    projects: dict,
+    actions: dict,
+    action_edit,
+) -> bool:
     """
     Apply a section-based edit for an existing action parsed from @project_notes.md.
 
@@ -91,6 +103,13 @@ def _apply_existing_action_edit(actions: dict, action_edit) -> bool:
         return False
 
     action = actions[aid]
+
+    old_state = (action.get("state") or "").strip().lower()
+
+    old_is_executable = is_visible_next_action(
+        action,
+        projects,
+    )
 
     # Never resurrect completed actions from project notes.
     # Completion from generated views should win over stale placement in @project_notes.md.
@@ -151,10 +170,60 @@ def _apply_existing_action_edit(actions: dict, action_edit) -> bool:
     else:
         return False
 
+
+    new_action = dict(action)
+    new_action["state"] = new_state
+    new_action["context"] = new_context
+    new_action["waiting_for"] = new_waiting_for
+    new_action["waiting_since"] = new_waiting_since
+
+    new_is_executable = is_visible_next_action(
+        new_action,
+        projects,
+    )
+
+    if old_is_executable and not new_is_executable:
+        now_dt = datetime.now(timezone.utc)
+
+        pid = action.get("project")
+        project = projects.get(pid) if pid else None
+
+        weight = action_weight_at(
+            base_dir,
+            action,
+            project,
+            now_dt,
+        )
+
+        append_metric_event(
+            base_dir,
+            {
+                "event": "weight_cleared",
+                "at": now_dt.isoformat().replace("+00:00", "Z"),
+                "action_id": aid,
+                "project_id": pid,
+                "weight": weight,
+                "reason": "state_transition",
+                "from_state": old_state,
+                "to_state": new_state,
+                "from_context": action.get("context"),
+                "to_context": new_context,
+            },
+        )
+
     set_if_different("state", new_state)
     set_if_different("context", new_context)
     set_if_different("waiting_for", new_waiting_for)
     set_if_different("waiting_since", new_waiting_since)
+
+    if (
+        old_state not in {"active", "waiting"}
+        and new_state in {"active", "waiting"}
+    ):
+        set_if_different(
+            "activated_at",
+            utc_now_iso(),
+        )
 
     if changed:
         action["last_touched"] = utc_now_iso()
@@ -173,6 +242,11 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
     master = load_master(base_dir)
     actions: dict = master.get("actions", {})
     projects: dict = master.get("projects", {})
+
+    ensure_week_snapshot(
+        base_dir,
+        master,
+    )
 
     # Read relevant view files
     view_files = [
@@ -205,7 +279,7 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
                     completion_map,
                     extract_completions_from_markdown(pn.read_text(encoding="utf-8")),
                 )
-  
+
 
     # Apply completions
     for item_id, done in completion_map.items():
@@ -214,7 +288,33 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
 
         if item_id.startswith("a_") and item_id in actions:
             a = actions[item_id]
+
             if a.get("state") != "completed":
+                if is_visible_next_action(a, projects):
+                    now_dt = datetime.now(timezone.utc)
+
+                    pid = a.get("project")
+                    project = projects.get(pid) if pid else None
+
+                    weight = action_weight_at(
+                        base_dir,
+                        a,
+                        project,
+                        now_dt,
+                    )
+
+                    append_metric_event(
+                        base_dir,
+                        {
+                            "event": "weight_cleared",
+                            "at": now_dt.isoformat().replace("+00:00", "Z"),
+                            "action_id": item_id,
+                            "project_id": pid,
+                            "weight": weight,
+                            "reason": "completed",
+                        },
+                    )
+
                 a["state"] = "completed"
                 a["completed"] = now
                 a["last_touched"] = now
@@ -291,12 +391,17 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
                 updated_projects += 1
 
             # ---- EXISTING actions moved between sections / edited in project notes ----
-            
+
             for ea in getattr(edits, "existing_actions", []) or []:
-                if _apply_existing_action_edit(actions, ea):
+                if _apply_existing_action_edit(
+                    base_dir,
+                    projects,
+                    actions,
+                    ea,
+                ):
                     updated_existing_actions += 1
 
-            
+
             # ---- NEW draft actions (no id marker in the file) ----
             # parse_project_notes() should provide edits.draft_actions: list[DraftAction]
             for da in getattr(edits, "draft_actions", []) or []:
@@ -358,11 +463,19 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
                     "context": context,
                     "waiting_for": waiting_for,
                     "created": now,
+                    "activated_at": now if state in {"active", "waiting"} else None,
                     "last_touched": now,
                     "waiting_since": now if state == "waiting" else None,
                     "due": due,
                     "notes": str(notes_raw),
                 }
+
+                p["lifetime_action_count"] = int(
+                    p.get("lifetime_action_count", 0)
+                ) + 1
+
+                projects[pid] = p
+
                 created_actions += 1
 
         if updated_projects:
@@ -388,7 +501,7 @@ def cmd_sync(base_dir: Path, *, prompt_next: bool = True) -> int:
                     contexts=contexts,
                     actions=actions,
                 )
-    
+
     save_master(base_dir, master)
 
     print(f"Sync complete. Marked completed: {completed_actions} actions, {completed_projects} projects.")

@@ -21,6 +21,14 @@ from gtdlib.rules.project_folders import (
 )
 from gtdlib.rules.schema import PROJECT_LIFECYCLES  # if you named it differently, adjust
 from gtdlib.commands.build_project_notes import ensure_project_notes_for_project
+from gtdlib.metrics.log import append_metric_event
+from gtdlib.metrics.weekly import (
+    action_weight_at,
+    ensure_week_snapshot,
+)
+from gtdlib.rules.visibility import is_visible_next_action
+import json
+
 
 def cmd_project_list(base_dir: Path, *, state: str | None = None) -> int:
     master = load_master(base_dir)
@@ -102,11 +110,87 @@ def cmd_project_list(base_dir: Path, *, state: str | None = None) -> int:
 
     return 0
 
+def _project_has_progress_path(actions: dict, pid: str) -> bool:
+    """
+    A project has a progress path if it has at least one
+    active or waiting action associated with it.
+
+    Agenda items are normally active actions with an agenda_ context,
+    so they are covered by the active state here.
+    """
+    for action in actions.values():
+        if action.get("project") != pid:
+            continue
+
+        state = (action.get("state") or "").strip().lower()
+
+        if state in {"active", "waiting"}:
+            return True
+
+    return False
+
+
+def _prompt_add_action_to_project(
+    base_dir: Path,
+    master: dict,
+    pid: str,
+) -> bool:
+    projects: dict = master.get("projects", {})
+    actions: dict = master.get("actions", {})
+
+    project = projects.get(pid)
+    if project is None:
+        print("Project not found.")
+        return False
+
+    contexts = get_contexts(base_dir)
+    now = utc_now_iso()
+
+    try:
+        draft = prompt_action_draft(
+            base_dir,
+            contexts,
+            now_iso=now,
+            project_id=pid,
+            default_state="active",
+            ask_context_when_waiting=False,
+        )
+    except ValueError as e:
+        print(str(e))
+        return False
+
+    render_action_preview(draft)
+
+    confirm = input("Save this action? [Y/n]: ").strip().lower()
+    if confirm in ("n", "no"):
+        print("Cancelled. Not saved.")
+        return False
+
+    aid = new_id("a")
+    actions[aid] = draft
+
+    project["lifetime_action_count"] = (
+        int(project.get("lifetime_action_count", 0)) + 1
+    )
+
+    projects[pid] = project
+    master["projects"] = projects
+    master["actions"] = actions
+
+    save_master(base_dir, master)
+
+    print(f"Added action {aid} to project {pid}.")
+    return True
 
 def cmd_project_edit(base_dir: Path) -> int:
     master = load_master(base_dir)
     projects: dict = master.get("projects", {})
     actions: dict = master.get("actions", {})
+
+    ensure_week_snapshot(
+        base_dir,
+        master,
+    )
 
     print("\nEdit which type of project?")
     print("  1. Active")
@@ -181,48 +265,48 @@ def cmd_project_edit(base_dir: Path) -> int:
         new_state = (updated.get("state") or "").strip().lower()
 
         now = utc_now_iso()
+
+        became_active = (
+            old_state != "active"
+            and new_state == "active"
+        )
+
+        if became_active:
+            updated["activated_at"] = now
+
         if old_state != "completed" and new_state == "completed":
             updated["completed"] = now
 
         projects[pid] = updated
         master["projects"] = projects
         save_master(base_dir, master)
+
         print("Project updated.")
-        return 0
+
+        if became_active and not _project_has_progress_path(actions, pid):
+            print("\nThis project has no progress path.")
+
+            answer = input(
+                "Add a next action now? [Y/n]: "
+            ).strip().lower()
+
+            if answer not in {"n", "no"}:
+                _prompt_add_action_to_project(
+                    base_dir,
+                    master,
+                    pid,
+                )
+
+    return 0
 
     # ---- add action ----
     if op == "add_action":
-        contexts = get_contexts(base_dir)
-        now = utc_now_iso()
-
-        try:
-            draft = prompt_action_draft(
-                base_dir,
-                contexts,
-                now_iso=now,
-                project_id=pid,
-                default_state="active",
-                ask_context_when_waiting=False,
-            )
-        except ValueError as e:
-            print(str(e))
-            return 2
-
-        render_action_preview(draft)
-        confirm = input("Save this action? [Y/n]: ").strip().lower()
-        if confirm in ("n", "no"):
-            print("Cancelled. Not saved.")
-            return 0
-
-        aid = new_id("a")
-        actions[aid] = draft
-        master["actions"] = actions
-        save_master(base_dir, master)
-        print(f"Added action {aid} to project {pid}.")
+        _prompt_add_action_to_project(
+            base_dir,
+            master,
+            pid,
+        )
         return 0
-
-    print("Invalid choice.")
-    return 2
 
 
 def _now_iso() -> str:
@@ -260,6 +344,59 @@ def _project_display(pid: str, p: dict) -> str:
     lifecycle = (p.get("lifecycle") or "live").strip().lower()
     return f"{title} ({state}, lifecycle={lifecycle}) [{pid}]"
 
+def _log_project_weight_cleared(
+    base_dir: Path,
+    pid: str,
+    project: dict,
+    actions: dict,
+    *,
+    reason: str,
+) -> None:
+    """
+    Record psychological weight removed when a whole project
+    leaves the live workload.
+
+    Only currently executable Next Actions contribute weight.
+    """
+
+    now_dt = datetime.now(timezone.utc)
+
+    total_weight = 0.0
+    action_ids: list[str] = []
+
+    for aid, action in actions.items():
+        if action.get("project") != pid:
+            continue
+
+        if not is_visible_next_action(
+            action,
+            {pid: project},
+        ):
+            continue
+
+        total_weight += action_weight_at(
+            base_dir,
+            action,
+            project,
+            now_dt,
+        )
+
+        action_ids.append(aid)
+
+    if total_weight <= 0:
+        return
+
+    append_metric_event(
+        base_dir,
+        {
+            "event": "weight_cleared",
+            "at": now_dt.isoformat().replace("+00:00", "Z"),
+            "project_id": pid,
+            "action_ids": action_ids,
+            "weight": total_weight,
+            "reason": reason,
+        },
+    )
 
 def cmd_project_complete(base_dir: Path) -> int:
     """
@@ -272,6 +409,11 @@ def cmd_project_complete(base_dir: Path) -> int:
     master = load_master(base_dir)
     projects: dict = master.get("projects", {})
     actions: dict = master.get("actions", {})
+
+    ensure_week_snapshot(
+        base_dir,
+        master,
+    )
 
     # Build eligible list
     eligible: dict[str, dict] = {}
@@ -314,6 +456,14 @@ def cmd_project_complete(base_dir: Path) -> int:
         print("Cancelled.")
         return 0
 
+    _log_project_weight_cleared(
+        base_dir,
+        pid,
+        p,
+        actions,
+        reason="project_completed",
+    )
+
     # Move folder
     review_root = base_dir / REVIEW_ROOT
     review_root.mkdir(parents=True, exist_ok=True)
@@ -345,6 +495,7 @@ def cmd_project_complete(base_dir: Path) -> int:
         "context": "inbox",
         "waiting_for": None,
         "created": now,
+        "activated_at": now,
         "last_touched": now,
         "waiting_since": None,
         "due": None,
@@ -369,6 +520,11 @@ def cmd_project_delete(base_dir: Path, *, hard: bool = False) -> int:
     master = load_master(base_dir)
     projects: dict = master.get("projects", {})
     actions: dict = master.get("actions", {})
+
+    ensure_week_snapshot(
+        base_dir,
+        master,
+    )
 
     # eligible = any project that has a folder (excluding someday by implication)
     eligible: dict[str, dict] = {}
@@ -434,6 +590,14 @@ def cmd_project_delete(base_dir: Path, *, hard: bool = False) -> int:
     if not _confirm(f"Move '{title}' to trash (retained for 28 days)?", default_yes=False):
         print("Cancelled.")
         return 0
+
+    _log_project_weight_cleared(
+        base_dir,
+        pid,
+        p,
+        actions,
+        reason="project_deleted",
+    )
 
     trash_root = base_dir / TRASH_ROOT
     trash_root.mkdir(parents=True, exist_ok=True)
@@ -521,7 +685,6 @@ def cmd_project_archive_finalize(base_dir: Path) -> int:
     assoc_actions = {aid: a for aid, a in actions.items() if a.get("project") == pid}
 
     # append to archive bundle
-    import json
     archive_path = base_dir / "archive_bundle.jsonl"
     record = {
         "archived_at": _now_iso(),
@@ -614,31 +777,48 @@ def cmd_project_trash_purge(base_dir: Path, *, dry_run: bool = False, days: int 
         print("Cancelled.")
         return 0
 
-    import json, shutil
+    import shutil
 
-    metrics_path = base_dir / "metrics.jsonl"
-    with metrics_path.open("a", encoding="utf-8") as mf:
-        for pid, p, path in candidates:
-            # metrics event
-            assoc = [a for a in actions.values() if a.get("project") == pid]
-            event = {
+    for pid, p, path in candidates:
+        # metrics event
+        # metrics event
+        assoc = {
+            aid: a
+            for aid, a in actions.items()
+            if a.get("project") == pid
+        }
+
+        append_metric_event(
+            base_dir,
+            {
                 "event": "project_purged",
                 "at": _now_iso(),
                 "project_id": pid,
                 "project_title": (p.get("title") or "").strip(),
+                "created": p.get("created"),
+                "activated_at": p.get("activated_at"),
                 "completed": p.get("completed"),
                 "trashed_at": p.get("trashed_at"),
                 "n_actions": len(assoc),
-            }
-            mf.write(json.dumps(event, ensure_ascii=False) + "\n")
+                "actions": assoc,
+                "lifetime_action_count": int(
+                    p.get("lifetime_action_count", len(assoc))
+                ),
+            },
+        )
 
-            # delete folder
-            shutil.rmtree(path, ignore_errors=True)
+        # delete folder
+        shutil.rmtree(path, ignore_errors=True)
 
-            # remove from master
-            projects.pop(pid, None)
-            for aid in [aid for aid, a in actions.items() if a.get("project") == pid]:
-                actions.pop(aid, None)
+        # remove from master
+        projects.pop(pid, None)
+
+        for aid in [
+            aid
+            for aid, a in actions.items()
+            if a.get("project") == pid
+        ]:
+            actions.pop(aid, None)
 
     master["projects"] = projects
     master["actions"] = actions

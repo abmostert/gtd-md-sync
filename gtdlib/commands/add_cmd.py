@@ -11,6 +11,7 @@ from gtdlib.prompts.selectors import choose_project_id
 
 from gtdlib.prompts.project_prompts import prompt_project_draft, render_project_preview
 from gtdlib.commands.build_project_notes import ensure_project_notes_for_project
+from gtdlib.metrics.weekly import ensure_week_snapshot
 
 
 
@@ -25,6 +26,10 @@ def cmd_add(base_dir: Path, *, full: bool = False) -> int:
     - Includes preview + confirm step: Save / Redo / Cancel.
     """
     master = load_master(base_dir)
+    ensure_week_snapshot(
+        base_dir,
+        master,
+    )
     now = utc_now_iso()
 
     # Contexts are enforced by config (except for waiting actions)
@@ -93,7 +98,20 @@ def cmd_add(base_dir: Path, *, full: bool = False) -> int:
 
             aid = new_id("a")
             master.setdefault("actions", {})[aid] = draft
-            save_master(base_dir, master)
+
+            if project_id:
+                projects = master.setdefault("projects", {})
+                project = projects.get(project_id)
+
+                if project is not None:
+                    project["lifetime_action_count"] = int(
+                        project.get("lifetime_action_count", 0)
+                    ) + 1
+                    projects[project_id] = project
+
+            save_master(base_dir    , master)
+
+
             print(f"Added action {aid}: {draft['title']}")
             return 0
 
@@ -129,8 +147,12 @@ def cmd_add(base_dir: Path, *, full: bool = False) -> int:
                 print("Redoing...\n")
                 continue
 
+            project_draft["lifetime_action_count"] = 0
+            project_draft["activated_at"] = None
+
             master.setdefault("projects", {})[pid] = project_draft
             save_master(base_dir, master)
+
             print(f"Added someday project {pid}: {project_draft['title']}")
             return 0
 
@@ -163,6 +185,9 @@ def cmd_add(base_dir: Path, *, full: bool = False) -> int:
         if decision == "r":
             print("Redoing...\n")
             continue
+
+        project_draft["lifetime_action_count"] = 1
+        project_draft["activated_at"] = project_draft.get("created")
 
         master.setdefault("projects", {})[pid] = project_draft
         master.setdefault("actions", {})[aid] = first_action_draft
