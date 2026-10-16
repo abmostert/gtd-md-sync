@@ -24,20 +24,61 @@ def _matches_pid(dir_name: str, project_id: str) -> bool:
     return dir_name.endswith(f"__{project_id}")
 
 
-def find_project_folder(base_dir: Path, project_id: str) -> ProjectFolderMatch | None:
+def find_project_folders(
+    base_dir: Path,
+    project_id: str,
+) -> list[ProjectFolderMatch]:
     """
-    Search for a project folder matching '*__{project_id}' under known roots.
-    Returns the first match in priority order.
+    Return every project folder matching '*__{project_id}'
+    under the known lifecycle roots.
     """
-    roots = [PROJECTS_ROOT, REVIEW_ROOT, TRASH_ROOT, ARCHIVES_ROOT]
+    matches: list[ProjectFolderMatch] = []
+
+    roots = [
+        PROJECTS_ROOT,
+        REVIEW_ROOT,
+        TRASH_ROOT,
+        ARCHIVES_ROOT,
+    ]
+
     for root in roots:
         root_path = base_dir / root
+
         if not root_path.exists():
             continue
+
         for child in root_path.iterdir():
-            if child.is_dir() and _matches_pid(child.name, project_id):
-                return ProjectFolderMatch(root_name=root, path=child)
-    return None
+            if child.is_dir() and _matches_pid(
+                child.name,
+                project_id,
+            ):
+                matches.append(
+                    ProjectFolderMatch(
+                        root_name=root,
+                        path=child,
+                    )
+                )
+
+    return matches
+
+
+def find_project_folder(
+    base_dir: Path,
+    project_id: str,
+) -> ProjectFolderMatch | None:
+    """
+    Backwards-compatible single-folder lookup.
+
+    Returns the first match in the traditional root priority order.
+    New reconciliation code should prefer find_project_folders()
+    so duplicate PIDs can be detected explicitly.
+    """
+    matches = find_project_folders(
+        base_dir,
+        project_id,
+    )
+
+    return matches[0] if matches else None
 
 
 def ensure_file(path: Path, content: str) -> None:
