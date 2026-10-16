@@ -3,7 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 
 from gtdlib.store import PROJECTS_DIRNAME
-from gtdlib.rules.project_folders import find_project_folder
+from gtdlib.rules.project_folders import (
+    find_project_folder,
+    find_project_folders,
+)
 
 def _slugify(title: str) -> str:
     import re
@@ -31,46 +34,136 @@ def _project_root_for_lifecycle(base_dir: Path, lifecycle: str) -> Path | None:
         return base_dir / "trash"
     return None
 
-def _resolve_project_dir(base_dir: Path, pid: str, title: str, lifecycle: str) -> Path | None:
+def _resolve_project_dir(
+    base_dir: Path,
+    pid: str,
+    title: str,
+    lifecycle: str,
+) -> Path | None:
     """
-    Find the existing folder for this PID if it already exists, and reconcile it
-    to the desired lifecycle root + current title slug.
+    Reconcile a project folder with its authoritative lifecycle.
 
-    Rules:
-    - PID is identity
-    - slug is presentation
-    - move/rename the existing folder instead of creating a second one
-    - do not try to merge if the target already exists
+    PID is identity.
+    master.json lifecycle determines the authoritative root.
+
+    If duplicate folders exist and one is already in the correct
+    lifecycle root, that folder wins and the duplicates are reported.
     """
-    root = _project_root_for_lifecycle(base_dir, lifecycle)
+
+    root = _project_root_for_lifecycle(
+        base_dir,
+        lifecycle,
+    )
+
     if root is None:
         return None
 
-    root.mkdir(parents=True, exist_ok=True)
+    root.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
 
     slug = _slugify(title)
     desired_dir = root / f"{slug}__{pid}"
 
-    match = find_project_folder(base_dir, pid)
+    matches = find_project_folders(
+        base_dir,
+        pid,
+    )
 
-    if match is None:
-        desired_dir.mkdir(parents=True, exist_ok=True)
-        return desired_dir
-
-    current_dir = match.path
-
-    if current_dir == desired_dir:
-        current_dir.mkdir(parents=True, exist_ok=True)
-        return current_dir
-
-    desired_dir.parent.mkdir(parents=True, exist_ok=True)
+    # ------------------------------------------------------------
+    # Correct target already exists
+    # ------------------------------------------------------------
 
     if desired_dir.exists():
-        print(f"Warning: target project folder already exists for {pid}: {desired_dir}")
+        extras = [
+            match
+            for match in matches
+            if match.path != desired_dir
+        ]
+
+        if extras:
+            print(
+                f"Warning: duplicate project folders found for {pid}. "
+                f"Authoritative lifecycle is '{lifecycle}'."
+            )
+
+            print(
+                f"  Using: {desired_dir}"
+            )
+
+            for match in extras:
+                print(
+                    f"  Duplicate: {match.path}"
+                )
+
         return desired_dir
 
-    current_dir.rename(desired_dir)
-    return desired_dir
+    # ------------------------------------------------------------
+    # Nothing exists anywhere
+    # ------------------------------------------------------------
+
+    if not matches:
+        desired_dir.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        return desired_dir
+
+    # ------------------------------------------------------------
+    # Prefer an existing folder already in the correct root
+    # even if its slug is stale.
+    # ------------------------------------------------------------
+
+    correct_root_matches = [
+        match
+        for match in matches
+        if match.path.parent == root
+    ]
+
+    if len(correct_root_matches) == 1:
+        current_dir = correct_root_matches[0].path
+
+        current_dir.rename(
+            desired_dir
+        )
+
+        return desired_dir
+
+    # ------------------------------------------------------------
+    # If there is exactly one folder overall, safely move it.
+    # ------------------------------------------------------------
+
+    if len(matches) == 1:
+        current_dir = matches[0].path
+
+        current_dir.rename(
+            desired_dir
+        )
+
+        return desired_dir
+
+    # ------------------------------------------------------------
+    # Multiple folders but none in the authoritative root:
+    # do not guess.
+    # ------------------------------------------------------------
+
+    print(
+        f"Warning: ambiguous duplicate project folders for {pid}. "
+        f"Expected lifecycle root: {root}"
+    )
+
+    for match in matches:
+        print(
+            f"  Found: {match.path}"
+        )
+
+    print(
+        "  No folder was moved automatically."
+    )
+
+    return None
 
 def ensure_project_notes_for_project(base_dir: Path, pid: str, project: dict, actions: dict) -> Path | None:
     """
